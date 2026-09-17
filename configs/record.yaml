@@ -6,10 +6,12 @@ env:
   full_action_space: false
 
 # Manual frame skip: repeat each action for frame_skip emulator frames and
-# store the pixel-wise max of the last max_pool_last raw frames. Atari flickers
-# sprites across alternate frames, so the max makes every ghost visible.
+# store the pixel-wise max of the last max_pool_last raw frames. Ms. Pac-Man
+# draws only one ghost per emulator frame, cycling through all four over 4
+# frames, so pooling over 2 frames (the DQN default) shows all four ghosts in
+# only ~29-47% of observations; pooling over all 4 frames shows them in ~99%.
 frame_skip: 4
-max_pool_last: 2
+max_pool_last: 4
 
 # Rows [top, bottom) of the 210x160 frame that contain the maze.
 # Rows 172+ are the score and lives display.
