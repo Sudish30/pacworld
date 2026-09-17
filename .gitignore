@@ -10,3 +10,5 @@ checkpoints/
 *.mp4
 *.gif
 .DS_Store
+.hf_cache/
+data/
