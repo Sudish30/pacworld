@@ -233,20 +233,27 @@ def plot(result_dirs, out_dir):
               "pellet_iou": "pellet set IoU", "wall_iou": "wall IoU vs maze", "wall_iou_gt": "wall IoU vs maze, ground truth",
               "pellets_remaining": "pellets remaining", "pellets_remaining_gt": "pellets remaining, ground truth",
               "responsiveness": "action responsiveness (fraction of events)", "responsiveness_events": "responsiveness events (count)"}
+    from matplotlib.ticker import NullFormatter, NullLocator
+    horizons = sorted({p[0] for per_model in data.values() for pts in per_model.values() for p in pts})
+    gated_h = sorted({p[0] for per_model in data.values() for pts in per_model.values() for p in pts if p[3]})
     for metric, per_model in data.items():
         fig, ax = plt.subplots(figsize=(6, 4))
         for mi, (model, pts) in enumerate(sorted(per_model.items())):
             pts.sort()
-            hs = [p[0] for p in pts]
-            ax.errorbar(hs, [p[1] for p in pts], yerr=[p[2] for p in pts], marker="o", capsize=3, label=model,
-                        color=f"C{mi}", mfc=[f"C{mi}" if p[3] else "white" for p in pts][0] if all(p[3] for p in pts) else None)
-            for p in pts:
-                if not p[3]:
-                    ax.plot([p[0]], [p[1]], marker="o", mfc="white", color=f"C{mi}")
+            g = [p for p in pts if p[3] and p[4] > 0]
+            u = [p for p in pts if not p[3] and p[4] > 0]
+            if g:
+                ax.errorbar([p[0] for p in g], [p[1] for p in g], yerr=[p[2] for p in g], marker="o", capsize=3,
+                            label=f"{model} (n={g[0][4]})", color=f"C{mi}")
+            if u:
+                ax.errorbar([p[0] for p in u], [p[1] for p in u], yerr=[p[2] for p in u], marker="o", mfc="white",
+                            capsize=3, linestyle="none", color=f"C{mi}", label=f"{model}, ungated" if not g else None)
         ax.set_xscale("log")
-        ax.set_xticks([15, 150, 450, 900])
-        ax.set_xticklabels(["15", "150", "450", "900*"])
-        ax.set_xlabel("rollout horizon (steps; * = ungated, no ground truth)")
+        ax.xaxis.set_minor_locator(NullLocator())
+        ax.xaxis.set_minor_formatter(NullFormatter())
+        ax.set_xticks(horizons)
+        ax.set_xticklabels([str(h) if h in gated_h else f"{h}*" for h in horizons])
+        ax.set_xlabel("rollout horizon (steps; * = ungated, no ground truth; hollow = ungated)")
         ax.set_ylabel(labels.get(metric, metric))
         ax.set_title(labels.get(metric, metric))
         ax.grid(alpha=0.3)
