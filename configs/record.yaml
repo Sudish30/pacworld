@@ -1,0 +1,34 @@
+# Data recording for the Ms. Pac-Man world model.
+env:
+  id: ALE/MsPacman-v5
+  frameskip: 4
+  repeat_action_probability: 0.0
+  full_action_space: false
+
+# Rows [top, bottom) of the 210x160 frame that contain the maze.
+# Rows 172+ are the score and lives display.
+crop:
+  top: 0
+  bottom: 172
+
+n_envs: 8
+steps: 200000            # total env steps across all envs before stopping new episodes
+mode: agent              # agent | random
+out_dir: data
+
+# Exploration on top of the PPO agent (agent mode only).
+eps: 0.1                 # probability of a uniformly random action
+sticky_prob: 0.02        # per-step probability of starting a sticky-random segment
+sticky_len: [5, 30]      # inclusive range of sticky segment lengths
+
+agent:
+  hf_repo: sb3/ppo-MsPacmanNoFrameskip-v4
+  hf_file: ppo-MsPacmanNoFrameskip-v4.zip
+  obs_size: 84           # policy was trained on 84x84 grayscale
+  frame_stack: 4
+  device: cpu
+
+playback:
+  scale: 3
+  fps: 15
+  band_px: 14            # height of the text band added below each frame
