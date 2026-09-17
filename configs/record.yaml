@@ -1,9 +1,15 @@
 # Data recording for the Ms. Pac-Man world model.
 env:
   id: ALE/MsPacman-v5
-  frameskip: 4
+  frameskip: 1             # emulator frames per env.step; we skip manually (see below)
   repeat_action_probability: 0.0
   full_action_space: false
+
+# Manual frame skip: repeat each action for frame_skip emulator frames and
+# store the pixel-wise max of the last max_pool_last raw frames. Atari flickers
+# sprites across alternate frames, so the max makes every ghost visible.
+frame_skip: 4
+max_pool_last: 2
 
 # Rows [top, bottom) of the 210x160 frame that contain the maze.
 # Rows 172+ are the score and lives display.

@@ -16,7 +16,7 @@ import time
 import numpy as np
 from PIL import Image
 
-from common import crop, get_ram, load_config, make_env
+from common import crop, get_ram, load_config, make_env, skip_step
 
 
 class PPOAgent:
@@ -168,7 +168,7 @@ def main():
                 actions[i] = int(policy_actions[i])
 
         for i in active:
-            obs, reward, terminated, truncated, _ = envs[i].step(actions[i])
+            obs, reward, terminated, truncated = skip_step(envs[i], actions[i], cfg)
             frame = crop(obs, cfg)
             buffers[i].step(actions[i], reward, terminated, frame, get_ram(envs[i]))
             if agent:

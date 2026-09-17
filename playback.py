@@ -10,7 +10,7 @@ import imageio.v2 as imageio
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from common import crop, get_ram, load_config, make_env
+from common import crop, get_ram, load_config, make_env, skip_step
 
 
 def parse_args():
@@ -44,7 +44,7 @@ def check_alignment(ep, cfg):
     assert np.array_equal(crop(obs, cfg), frames[0]), "initial frame mismatch"
     assert np.array_equal(get_ram(env), ram[0]), "initial RAM mismatch"
     for i, a in enumerate(actions):
-        obs, reward, terminated, truncated, _ = env.step(int(a))
+        obs, reward, terminated, truncated = skip_step(env, int(a), cfg)
         if not np.array_equal(crop(obs, cfg), frames[i + 1]):
             raise AssertionError(f"frame mismatch at step {i}: frames[{i+1}] does not follow actions[{i}]")
         if not np.array_equal(get_ram(env), ram[i + 1]):

@@ -37,3 +37,23 @@ def crop(frame, cfg):
 
 def get_ram(env):
     return np.asarray(env.unwrapped.ale.getRAM(), dtype=np.uint8)
+
+
+def skip_step(env, action, cfg):
+    """Repeat `action` for cfg["frame_skip"] emulator frames.
+
+    Returns (obs, reward, terminated, truncated) where obs is the pixel-wise
+    max over the last cfg["max_pool_last"] raw frames (standard DQN max-pooling)
+    and reward is summed over the skipped frames. Stops early if the episode ends.
+    """
+    n, k = cfg["frame_skip"], cfg["max_pool_last"]
+    total, recent = 0.0, []
+    terminated = truncated = False
+    for _ in range(n):
+        frame, reward, terminated, truncated, _ = env.step(action)
+        total += reward
+        recent.append(frame)
+        if terminated or truncated:
+            break
+    obs = np.max(np.stack(recent[-k:]), axis=0)
+    return obs, total, terminated, truncated
