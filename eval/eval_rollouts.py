@@ -274,6 +274,8 @@ def main():
     p.add_argument("--seeds", type=int)
     p.add_argument("--horizon", type=int)
     p.add_argument("--plot", nargs="*", help="result dirs to plot together (no rollouts are run)")
+    p.add_argument("--save-all-preds", action="store_true", help="save every rollout's frames to preds_all.npy")
+    p.add_argument("--no-score", action="store_true", help="run the rollouts and save frames, skip metric scoring")
     a = p.parse_args()
     cfg = load_config(a.config)
     for k in ("n_episodes", "seeds", "horizon"):
@@ -294,6 +296,17 @@ def main():
     print(f"episodes: {[(e['seed'], len(e['actions'])) for e in eps]}")
     gts = [analyse_gt(e, ref, cfg) for e in eps]
     jobs, preds = run_rollouts(cfg, predictor, eps, ref, device, a.seed)
+    out_early = out_root / (a.name or a.model)
+    out_early.mkdir(parents=True, exist_ok=True)
+    if a.save_all_preds:
+        np.save(out_early / "preds_all.npy", preds)
+        with open(out_early / "jobs.csv", "w", newline="") as f:
+            wr = csv.writer(f)
+            wr.writerow(["row", "episode", "seed", "episode_len"])
+            wr.writerows([[j, eps[ei]["seed"], s_, len(eps[ei]["actions"])] for j, (ei, s_) in enumerate(jobs)])
+        print(f"saved {out_early}/preds_all.npy {preds.shape} and jobs.csv")
+    if a.no_score:
+        return
     rows = score(cfg, eps, gts, jobs, preds, ref, a.model)
     summary = summarise(cfg, rows, a.model)
     out = out_root / (a.name or a.model)
