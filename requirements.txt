@@ -7,3 +7,4 @@ stable-baselines3
 huggingface_hub
 fastapi
 uvicorn[standard]
+matplotlib
