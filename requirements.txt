@@ -1,0 +1,7 @@
+gymnasium[atari]
+torch
+numpy
+imageio
+wandb
+stable-baselines3
+huggingface_hub
