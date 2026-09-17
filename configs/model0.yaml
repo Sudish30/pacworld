@@ -1,0 +1,41 @@
+# Model 0: conv UNet next-frame predictor trained with MSE (baseline before diffusion).
+
+data:
+  folder: data/agent
+  cache: data/cache/frames64.npz       # one-time resized cache of all episodes
+  val_episodes: configs/val_episodes.json
+  val_frac: 0.1                        # fraction of episodes held out (drawn once, then frozen)
+  split_seed: 0
+  size: 64                             # frames resized to size x size with area averaging
+  context: 4                           # context frames (and actions) per window
+
+model:
+  base_channels: 40
+  channel_mults: [1, 2, 4]             # widths 40 / 80 / 160 at 64 / 32 / 16 px
+  blocks_per_level: 2
+  cond_dim: 256                        # action conditioning vector injected into every res block
+  action_embed_dim: 32
+  n_actions: 9
+  groupnorm_groups: 8
+  predict_residual: true               # output = last context frame + network delta
+
+train:
+  minutes: 20                          # wall-clock training budget
+  batch_size: 64
+  lr: 3.0e-4                           # cosine-decayed over the budget
+  weight_decay: 0.01
+  grad_clip: 1.0
+  log_every: 50
+  eval_every: 500
+  eval_batches: 20                     # fixed val batches used for val MSE / PSNR
+  device: mps
+  checkpoint: checkpoints/model0.pt
+  wandb_project: pacworld
+
+eval:
+  out_dir: outputs/model0
+  grid_samples: 8
+  rollout_seconds: 5
+  rollout_start: 100                   # step in the val episode to start the rollout (past the pen period)
+  fps: 15                              # data rate: 60 Hz emulator / frame_skip 4
+  upscale: 4
