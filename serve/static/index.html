@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>pacworld</title>
+<style>
+  body { background:#111; color:#ddd; font-family: ui-monospace, Menlo, monospace; margin:0; display:flex; flex-direction:column; align-items:center; }
+  h1 { font-size:16px; font-weight:normal; margin:14px 0 6px; color:#f6c; }
+  #hud { font-size:13px; margin:6px 0; display:flex; gap:18px; flex-wrap:wrap; justify-content:center; }
+  #hud span b { color:#fff; }
+  canvas { image-rendering: pixelated; image-rendering: crisp-edges; background:#000; border:1px solid #333; }
+  #controls { margin:10px 0; display:flex; gap:10px; align-items:center; font-size:13px; }
+  button { background:#222; color:#eee; border:1px solid #555; padding:5px 12px; font-family:inherit; cursor:pointer; }
+  button:hover { background:#333; }
+  input { width:60px; background:#222; color:#eee; border:1px solid #555; padding:4px; font-family:inherit; }
+  #help { font-size:12px; color:#888; margin-bottom:16px; }
+  #status { font-size:12px; color:#8f8; height:16px; }
+</style>
+</head>
+<body>
+<h1>pacworld · Model 1 (diffusion world model)</h1>
+<div id="hud">
+  <span>fps <b id="fps">–</b></span>
+  <span>latency p50/p95 <b id="lat">–</b> ms</span>
+  <span>action <b id="action">NOOP</b></span>
+  <span>checkpoint step <b id="step">–</b></span>
+  <span>episode seed <b id="seed">–</b></span>
+  <span>frames <b id="frames">0</b></span>
+</div>
+<canvas id="c" width="384" height="384"></canvas>
+<div id="controls">
+  <button id="reset">Reset</button>
+  <label>ctx σ <input id="sigma" type="number" step="0.01" min="0" max="1" value="0"></label>
+  <button id="reload">Reload checkpoint</button>
+  <span id="status"></span>
+</div>
+<div id="help">Arrow keys (or WASD) to move · diagonals by holding two keys · click the canvas if keys don't respond</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const $ = id => document.getElementById(id);
+let ws, keys = {up:false, down:false, left:false, right:false};
+let frameCount = 0, lastFpsTime = performance.now(), fpsFrames = 0;
+
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.binaryType = 'arraybuffer';
+  ws.onopen = () => { $('status').textContent = 'connected'; sendKeys(); };
+  ws.onclose = () => { $('status').textContent = 'disconnected – retrying'; setTimeout(connect, 1000); };
+  ws.onmessage = async ev => {
+    if (typeof ev.data === 'string') {
+      const m = JSON.parse(ev.data);
+      if (m.type === 'info') {
+        $('step').textContent = m.step; $('seed').textContent = m.seed; $('sigma').value = m.ctx_sigma;
+        const s = m.upscale * 64; canvas.width = s; canvas.height = s; ctx.imageSmoothingEnabled = false;
+        frameCount = 0;
+      } else if (m.type === 'stats') {
+        $('lat').textContent = m.latency_p50_ms + ' / ' + m.latency_p95_ms;
+        $('action').textContent = m.action; $('step').textContent = m.step; $('frames').textContent = m.frames;
+      }
+      return;
+    }
+    const bmp = await createImageBitmap(new Blob([ev.data], {type: 'image/png'}));
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    frameCount++; fpsFrames++;
+    const now = performance.now();
+    if (now - lastFpsTime >= 1000) { $('fps').textContent = (fpsFrames * 1000 / (now - lastFpsTime)).toFixed(1); fpsFrames = 0; lastFpsTime = now; }
+  };
+}
+function sendKeys() { if (ws && ws.readyState === 1) ws.send(JSON.stringify({type: 'keys', keys})); }
+const keymap = {ArrowUp:'up', ArrowDown:'down', ArrowLeft:'left', ArrowRight:'right', w:'up', s:'down', a:'left', d:'right', W:'up', S:'down', A:'left', D:'right'};
+window.addEventListener('keydown', e => { const k = keymap[e.key]; if (!k) return; e.preventDefault(); if (!keys[k]) { keys[k] = true; sendKeys(); } });
+window.addEventListener('keyup', e => { const k = keymap[e.key]; if (!k) return; e.preventDefault(); if (keys[k]) { keys[k] = false; sendKeys(); } });
+window.addEventListener('blur', () => { keys = {up:false, down:false, left:false, right:false}; sendKeys(); });
+$('reset').onclick = () => { if (ws && ws.readyState === 1) ws.send(JSON.stringify({type: 'reset', ctx_sigma: parseFloat($('sigma').value) || 0})); canvas.focus(); };
+$('reload').onclick = async () => {
+  $('status').textContent = 'reloading…';
+  try { const r = await (await fetch('/reload', {method: 'POST'})).json(); $('status').textContent = 'loaded step ' + r.step; $('step').textContent = r.step; }
+  catch (e) { $('status').textContent = 'reload failed: ' + e; }
+};
+connect();
+</script>
+</body>
+</html>

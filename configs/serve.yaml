@@ -1,0 +1,11 @@
+# Playable demo server for Model 1.
+checkpoint: checkpoints/model1_ema.pt
+host: 127.0.0.1          # bind to localhost only; reach it through an SSH tunnel
+port: 8000
+fps: 15                  # server tick rate (data rate: 60 Hz emulator / frame_skip 4)
+sampler_steps: 3         # Euler steps per frame
+ctx_sigma: 0.0           # context noise level at inference (GameNGen); adjustable per session from the page
+start_step: 100          # where in the val episode the context is taken (past the pen period)
+upscale: 6               # canvas scale (nearest-neighbour), used by the page
+bf16: true
+stats_log_every_s: 5
