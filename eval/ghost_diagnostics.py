@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "eval"))
 from common import load_config  # noqa: E402
-from dataset import to_float, to_uint8  # noqa: E402
+from dataset import History, episode_path, to_float, to_uint8  # noqa: E402
 import detectors as D  # noqa: E402
 import metrics as M  # noqa: E402
 from eval_rollouts import DiffusionPredictor, load_episodes, write_csv  # noqa: E402
@@ -65,24 +65,24 @@ def _analyse(frames):
 
 
 def run_condition(cfg, predictor, eps, device, seed, horizon, teacher, batch):
-    K, start, size = cfg["data"]["context"], cfg["rollout"]["start_step"], cfg["data"]["size"]
+    start, size = cfg["rollout"]["start_step"], cfg["data"]["size"]
     jobs = [(ei, s) for ei in range(len(eps)) for s in range(cfg["rollout"]["seeds"])]
     preds = np.zeros((len(jobs), horizon, size, size, 3), np.uint8)
 
-    def ctx_at(indices, bat):
-        return torch.stack([to_float(torch.from_numpy(eps[ei]["frames"][i - K:i]).permute(0, 3, 1, 2)).reshape(3 * K, size, size)
-                            for (ei, _), i in zip(bat, indices)]).to(device)
-
     for b0 in range(0, len(jobs), batch):
         bat = jobs[b0:b0 + batch]
-        ctx = ctx_at([start] * len(bat), bat)
+        hist = History.from_episodes([(eps[ei]["frames"], eps[ei]["actions"]) for ei, _ in bat], start, predictor.offsets, device)
         gens = [torch.Generator(device=device).manual_seed(seed * 100003 + eps[ei]["seed"] % 100003 + 7919 * s) for ei, s in bat]
         for k in range(horizon):
-            acts = torch.tensor([[int(eps[ei]["actions"][(start + k - K + j) % len(eps[ei]["actions"])]) for j in range(K)]
-                                 for ei, _ in bat], device=device)
+            action = torch.tensor([int(eps[ei]["actions"][(start + k - 1) % len(eps[ei]["actions"])]) for ei, _ in bat], device=device)
+            ctx, acts = hist.context(action)
             pred = predictor(ctx, acts, gens)
             preds[b0:b0 + len(bat), k] = to_uint8(pred).permute(0, 2, 3, 1).cpu().numpy()
-            ctx = ctx_at([start + k + 1] * len(bat), bat) if teacher else torch.cat([ctx[:, 3:], pred], dim=1)
+            if teacher:   # teacher forcing: the history keeps the real frames, never the model's own
+                real = np.stack([eps[ei]["frames"][start + k] for ei, _ in bat])
+                hist.push(to_float(torch.from_numpy(real).permute(0, 3, 1, 2)).to(device))
+            else:
+                hist.push(pred)
     return jobs, preds
 
 
@@ -91,8 +91,7 @@ def pooled_colour_stats(cfg, eps, stride=9):
 
     Reads the native-resolution recordings, since load_episodes() keeps only the 64x64 cache.
     """
-    folder = ROOT / cfg["data"]["folder"]
-    natives = [np.load(folder / f"ep_{e['seed']}.npz")["frames"] for e in eps]
+    natives = [np.load(episode_path(cfg["data"], e["seed"], ROOT))["frames"] for e in eps]
     rows = []
     for g in D.GHOST_NAMES:
         pure = np.array(D.GHOSTS[g])

@@ -21,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "eval"))
 from common import load_config  # noqa: E402
+from dataset import episode_path  # noqa: E402
 import detectors as D  # noqa: E402
 from eval_rollouts import write_csv  # noqa: E402
 
@@ -52,8 +53,7 @@ def main():
     names = list(z["conditions"])
     start, H = int(z["start"]), int(z["horizon"])
     R = len(z["episode_seed"])
-    folder = ROOT / cfg["data"]["folder"]
-    rams = {int(s): np.load(folder / f"ep_{int(s)}.npz")["ram"] for s in np.unique(z["episode_seed"])}
+    rams = {int(s): np.load(episode_path(cfg["data"], int(s), ROOT))["ram"] for s in np.unique(z["episode_seed"])}
 
     # per rollout ground-truth state
     G = D.GHOST_NAMES
@@ -206,7 +206,7 @@ def main():
         for r in range(R):
             sd = int(z["episode_seed"][r])
             if sd not in gt_frames:
-                gt_frames[sd] = D.downsample_frames(np.load(folder / f"ep_{sd}.npz")["frames"][start:start + H])
+                gt_frames[sd] = D.downsample_frames(np.load(episode_path(cfg["data"], sd, ROOT))["frames"][start:start + H])
             g_occ[r] = [occ(f) for f in gt_frames[sd]]
             m_occ[r] = [occ(np.asarray(preds[r, k])) for k in range(H)]
         count = z[f"c{ci}_det"].sum(-1)

@@ -1,0 +1,67 @@
+# m1-2M-ctx6s16: Model 1 (configs/model1.yaml) retrained on the 2M-step dataset. Context: 4 recent frames plus 6 frames strided 16 steps apart (reach 97 steps; the longest real pen stay is 91).
+# Identical to model1.yaml except data.*, train.checkpoint_dir and eval.out_dir.
+
+data:
+  folder: [data/agent, data/2m/agent]  # the original 200k-step set plus the 2M-step recording (record.py --seed 43)
+  cache: data/cache/frames64_2m.npy    # streamed .npy cache (27 GB); metadata in frames64_2m_meta.npz
+  val_episodes: configs/val_episodes_2m.json   # frozen by tools/freeze_val_split.py: the 35 original val episodes + 10% of the new ones
+  val_base: configs/val_episodes.json  # frozen split of the original set, reused as-is
+  val_new_folder: data/2m/agent        # val_frac of these episodes join the val split
+  val_frac: 0.1
+  split_seed: 0
+  size: 64
+  context: 10
+  context_offsets: [-97, -81, -65, -49, -33, -17, -4, -3, -2, -1]   # frames before the episode start clamp to its first frame
+
+model:
+  widths: [64, 96, 192, 192]           # at 64 / 32 / 16 / 8 px (~18.8M params)
+  blocks_per_level: 2                  # encoder blocks per level (decoder uses one more)
+  attn_levels: [2, 3]                  # self-attention after every block at 16 and 8 px
+  heads: 4
+  cond_dim: 256
+  action_embed_dim: 32
+  n_actions: 9
+  groupnorm_groups: 32
+  fourier_dim: 64                      # Fourier features for the noise-level embeddings
+  dropout: 0.0
+
+diffusion:                             # Karras et al. 2022 (EDM), DIAMOND Atari values
+  sigma_data: 0.5
+  p_mean: -0.4                         # ln(sigma) ~ N(p_mean, p_std) during training
+  p_std: 1.2
+  sigma_min: 0.002
+  sigma_max: 20.0
+  rho: 7
+  rollout_steps: 3                     # Euler steps for autoregressive rollouts
+  grid_steps: 10                       # Euler steps for eval grids
+
+ctx_noise:                             # GameNGen-style context noise augmentation
+  enabled: true
+  prob: 0.5                            # fraction of training samples whose context is noised
+  sigma_min: 0.002                     # log-uniform range of the context noise level
+  sigma_max: 0.5
+  infer_sigma: 0.0                     # context noise level used at inference
+
+train:
+  steps: 100000
+  batch_size: 64
+  lr: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 100                    # linear warmup, then constant
+  grad_clip: 1.0
+  ema_decay: 0.999
+  bf16: true
+  log_every: 50
+  eval_every: 5000
+  eval_batches: 20                     # fixed val batches (fixed sigma and noise) for val denoising loss
+  device: auto
+  checkpoint_dir: checkpoints/m1-2M-ctx6s16   # own folder: never overwrite Model 1's checkpoints/model1_ema.pt
+  wandb_project: pacworld
+
+eval:
+  out_dir: outputs/m1-2M-ctx6s16
+  grid_samples: 8
+  rollout_seconds: 5
+  rollout_start: 100
+  fps: 15
+  upscale: 4

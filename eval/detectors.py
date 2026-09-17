@@ -26,6 +26,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from dataset import episode_files  # noqa: E402
 from tools.ghost_visibility import GHOSTS, FRIGHTENED, BACKGROUND_BLUE  # noqa: E402
 
 BG = (0, 28, 136)
@@ -262,8 +263,7 @@ def downsample_frames(native_frames, size=64):
 
 def load_reference(cfg):
     """Build the maze reference from the first frame of the first recorded episode."""
-    folder = ROOT / cfg["data"]["folder"]
-    first = sorted(folder.glob("ep_*.npz"))[0]
+    first = episode_files(cfg["data"], ROOT)[0]
     return MazeReference(np.load(first)["frames"][0], cfg, cfg["data"]["size"])
 
 
@@ -272,8 +272,7 @@ def validate(cfg, n_episodes=3, stride=6, seed=0):
     from common import load_config  # noqa
     ref = load_reference(cfg)
     print(f"maze reference: {ref.n_dots} dots + {ref.n_power} power pellets, wall cells {ref.wall_ref.sum()}")
-    folder = ROOT / cfg["data"]["folder"]
-    files = sorted(folder.glob("ep_*.npz"))
+    files = episode_files(cfg["data"], ROOT)
     rng = np.random.default_rng(seed)
     files = [files[i] for i in rng.choice(len(files), n_episodes, replace=False)]
     stats = {n: {"tot": 0, "hit": 0, "absent": 0, "false": 0, "err": []} for n in ["pac"] + GHOST_NAMES}

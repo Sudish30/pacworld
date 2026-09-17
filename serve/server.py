@@ -35,7 +35,7 @@ from PIL import Image
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from common import load_config  # noqa: E402
-from dataset import load_cache, load_split, to_float, to_uint8  # noqa: E402
+from dataset import History, context_offsets, load_cache, load_split, to_uint8  # noqa: E402
 from model1 import build_model, euler_sample  # noqa: E402
 
 ACTION_NAMES = ["NOOP", "UP", "RIGHT", "LEFT", "DOWN", "UPRIGHT", "UPLEFT", "DOWNRIGHT", "DOWNLEFT"]
@@ -66,9 +66,8 @@ def keys_to_action(keys):
 
 
 class Session:
-    def __init__(self, ctx, hist, seed, episode, ctx_sigma):
-        self.ctx = ctx              # (1, 3K, H, W) float in [-1, 1] on device
-        self.hist = hist            # the K actions used for the previous target
+    def __init__(self, hist, seed, episode, ctx_sigma):
+        self.hist = hist            # dataset.History: past frames and actions; builds each context with the training rule
         self.seed = seed
         self.episode = episode
         self.ctx_sigma = ctx_sigma
@@ -85,9 +84,9 @@ class World:
         self.lock = threading.Lock()
         self.model, self.model_cfg, self.step = None, None, None
         self.load()
-        self.K = self.model_cfg["data"]["context"]
+        self.offsets = context_offsets(self.model_cfg["data"])
         self.dcfg = self.model_cfg["diffusion"]
-        self.cache = load_cache(self.model_cfg)
+        self.cache = load_cache(self.model_cfg, mmap=True)   # only a few val frames are read per session
         _, self.val_idx = load_split(self.model_cfg, self.cache["ep_seed"])
         self.latencies = deque(maxlen=300)
         self.frame_times = deque(maxlen=300)
@@ -109,19 +108,17 @@ class World:
     def new_session(self, ctx_sigma=None):
         e = self.rng.choice(self.val_idx)
         a, b = int(self.cache["ep_start"][e]), int(self.cache["ep_start"][e + 1])
-        start = min(a + self.cfg["start_step"], b - 2)
-        frames = torch.from_numpy(self.cache["frames"][start - self.K:start])
-        H, W = frames.shape[1:3]
-        ctx = to_float(frames.permute(0, 3, 1, 2)).reshape(1, self.K * 3, H, W).to(self.device)
-        hist = [int(x) for x in self.cache["actions"][start - self.K - 1:start - 1]]
+        start = min(self.cfg["start_step"], b - a - 2)
+        # Seed the history with the real frames before `start`, back to the episode's first frame if the
+        # context reaches that far, so the first steps of a session are clamped exactly as in training.
+        hist = History.from_episodes([(self.cache["frames"][a:b], self.cache["actions"][a:b])], start, self.offsets, self.device)
         sigma = self.cfg["ctx_sigma"] if ctx_sigma is None else float(ctx_sigma)
-        return Session(ctx, hist, int(self.cache["ep_seed"][e]), e, sigma)
+        return Session(hist, int(self.cache["ep_seed"][e]), e, sigma)
 
     @torch.inference_mode()
     def predict(self, session, action):
         """Sample the next frame for `action`, advance the session, return HxWx3 uint8."""
-        acts = torch.tensor([session.hist[1:] + [action]], device=self.device)
-        ctx = session.ctx
+        ctx, acts = session.hist.context(torch.tensor([action], device=self.device))
         sigma = torch.full((1,), session.ctx_sigma, device=self.device)
         if session.ctx_sigma > 0:
             ctx = ctx + session.ctx_sigma * torch.randn(ctx.shape, device=self.device, generator=self.gen)
@@ -129,8 +126,7 @@ class World:
             with torch.autocast("cuda", dtype=torch.bfloat16, enabled=self.use_bf16):
                 pred = euler_sample(self.model, ctx, acts, sigma, self.cfg["sampler_steps"], self.dcfg, self.gen)
         pred = pred.float()
-        session.ctx = torch.cat([session.ctx[:, 3:], pred], dim=1)
-        session.hist = session.hist[1:] + [action]
+        session.hist.push(pred)
         session.frames += 1
         return to_uint8(pred[0]).permute(1, 2, 0).cpu().numpy()
 

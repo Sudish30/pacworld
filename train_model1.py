@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from PIL import Image, ImageDraw, ImageFont
 
 from common import load_config
-from dataset import get_datasets, to_float, to_uint8
+from dataset import History, context_offsets, get_datasets, to_float, to_uint8
 from model1 import build_model, count_params, euler_sample, sample_sigmas
 from train_model0 import pick_device, psnr_from_mse, upscale
 
@@ -106,26 +106,27 @@ def render_grid(model, val, cfg, device, out_path, seed):
 
 @torch.no_grad()
 def render_rollout(model, cache, episode_idx, cfg, device, out_path, seed):
-    e, d, ccfg, K = cfg["eval"], cfg["diffusion"], cfg["ctx_noise"], cfg["data"]["context"]
+    e, d, ccfg = cfg["eval"], cfg["diffusion"], cfg["ctx_noise"]
     steps = int(e["rollout_seconds"] * e["fps"])
     start_abs, end_abs = int(cache["ep_start"][episode_idx]), int(cache["ep_start"][episode_idx + 1])
     t0 = min(start_abs + e["rollout_start"], end_abs - steps - 1)
-    frames = torch.from_numpy(cache["frames"][t0 - K:t0 + steps])
-    actions = torch.from_numpy(cache["actions"][t0 - K:t0 + steps])
+    frames = torch.from_numpy(cache["frames"][t0:t0 + steps])            # the real frames being predicted
+    actions = torch.from_numpy(cache["actions"][t0 - 1:t0 + steps - 1])  # actions[t] produced frames[t]
     names = ["NOOP", "UP", "RIGHT", "LEFT", "DOWN", "UPRIGHT", "UPLEFT", "DOWNRIGHT", "DOWNLEFT"]
 
     g = torch.Generator().manual_seed(seed)
     gd = torch.Generator(device=device).manual_seed(seed)
-    ctx = to_float(frames[:K].permute(0, 3, 1, 2)).reshape(1, K * 3, *frames.shape[1:3]).to(device)
+    episode = (cache["frames"][start_abs:end_abs], cache["actions"][start_abs:end_abs])
+    hist = History.from_episodes([episode], t0 - start_abs, context_offsets(cfg["data"]), device)
     preds, mses = [], []
     for t in range(steps):
-        acts = actions[t:t + K][None].to(device)
+        ctx, acts = hist.context(actions[t:t + 1].to(device))
         ctx_in, ctx_sigma = noise_context(ctx, ccfg, g, device, train=False)
         pred = euler_sample(model, ctx_in, acts, ctx_sigma, d["rollout_steps"], d, gd)
-        real = to_float(frames[K + t].permute(2, 0, 1))[None].to(device)
+        real = to_float(frames[t].permute(2, 0, 1))[None].to(device)
         mses.append(F.mse_loss(pred, real).item())
         preds.append(to_uint8(pred[0]).cpu())
-        ctx = torch.cat([ctx[:, 3:], pred], dim=1)
+        hist.push(pred)
 
     s, size = e["upscale"], cfg["data"]["size"] * e["upscale"]
     font = ImageFont.load_default(size=12)
@@ -133,9 +134,9 @@ def render_rollout(model, cache, episode_idx, cfg, device, out_path, seed):
     for t in range(steps):
         canvas = Image.new("RGB", (2 * size + 8, size + 18), "black")
         canvas.paste(upscale(preds[t], s), (0, 18))
-        canvas.paste(upscale(frames[K + t].permute(2, 0, 1), s), (size + 8, 18))
+        canvas.paste(upscale(frames[t].permute(2, 0, 1), s), (size + 8, 18))
         dr = ImageDraw.Draw(canvas)
-        dr.text((2, 2), f"pred  t={t + 1:<3d} {names[int(actions[K + t - 1])]}", fill="white", font=font)
+        dr.text((2, 2), f"pred  t={t + 1:<3d} {names[int(actions[t])]}", fill="white", font=font)
         dr.text((size + 10, 2), "real", fill="white", font=font)
         gif.append(canvas)
     gif[0].save(out_path, save_all=True, append_images=gif[1:], duration=int(1000 / e["fps"]), loop=0)

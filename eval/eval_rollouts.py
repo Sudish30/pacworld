@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "eval"))
 from common import load_config  # noqa: E402
-from dataset import to_float, to_uint8  # noqa: E402
+from dataset import History, context_offsets, episode_files, to_uint8  # noqa: E402
 import detectors as D  # noqa: E402
 import metrics as M  # noqa: E402
 
@@ -43,6 +43,7 @@ class DiffusionPredictor:
         self.model = build_model(ck["cfg"]).to(device).eval()
         self.model.load_state_dict(ck["ema"])
         self.step = ck["step"]
+        self.offsets = context_offsets(ck["cfg"]["data"])     # the context layout the checkpoint was trained with
         self.d = ck["cfg"]["diffusion"]
         self.sigmas = karras_schedule(c["sampler_steps"], self.d["sigma_min"], self.d["sigma_max"], self.d["rho"], device)
         self.ctx_sigma = float(c["ctx_sigma"])
@@ -73,6 +74,7 @@ class Model0Predictor:
         self.model = build_model(ck["cfg"]).to(device).eval()
         self.model.load_state_dict(ck["model"])
         self.step = ck["step"]
+        self.offsets = context_offsets(ck["cfg"]["data"])
         self.name = f"model0 (step {self.step}, deterministic)"
 
     @torch.inference_mode()
@@ -83,9 +85,8 @@ class Model0Predictor:
 # ----------------------------------------------------------------------------- data
 def load_episodes(cfg):
     val = set(json.load(open(ROOT / cfg["data"]["val_episodes"]))["val_episode_seeds"])
-    folder = ROOT / cfg["data"]["folder"]
     eps = []
-    for f in sorted(folder.glob("ep_*.npz")):
+    for f in episode_files(cfg["data"], ROOT):
         seed = int(f.stem.split("_")[1])
         if seed in val:
             e = np.load(f)
@@ -111,21 +112,21 @@ def analyse_gt(ep, ref, cfg):
 # ----------------------------------------------------------------------------- rollouts
 def run_rollouts(cfg, predictor, eps, ref, device, seed):
     r = cfg["rollout"]
-    K, start, H = cfg["data"]["context"], r["start_step"], r["horizon"]
+    start, H = r["start_step"], r["horizon"]
     jobs = [(ei, s) for ei in range(len(eps)) for s in range(r["seeds"])]
     preds = np.zeros((len(jobs), H, ref.size, ref.size, 3), np.uint8)
     t0 = time.time()
     for b0 in range(0, len(jobs), r["batch"]):
         batch = jobs[b0:b0 + r["batch"]]
-        ctx = torch.stack([to_float(torch.from_numpy(eps[ei]["frames"][start - K:start]).permute(0, 3, 1, 2)).reshape(3 * K, ref.size, ref.size)
-                           for ei, _ in batch]).to(device)
+        hist = History.from_episodes([(eps[ei]["frames"], eps[ei]["actions"]) for ei, _ in batch], start, predictor.offsets, device)
         gens = [torch.Generator(device=device).manual_seed(seed * 100003 + eps[ei]["seed"] % 100003 + 7919 * s) for ei, s in batch]
         for k in range(H):
-            acts = torch.tensor([[int(eps[ei]["actions"][(start + k - K + j) % len(eps[ei]["actions"])]) for j in range(K)]
-                                 for ei, _ in batch], device=device)
+            # recorded action that produced frame start + k (wraps once the rollout outlives the episode)
+            action = torch.tensor([int(eps[ei]["actions"][(start + k - 1) % len(eps[ei]["actions"])]) for ei, _ in batch], device=device)
+            ctx, acts = hist.context(action)
             pred = predictor(ctx, acts, gens)
             preds[b0:b0 + len(batch), k] = to_uint8(pred).permute(0, 2, 3, 1).cpu().numpy()
-            ctx = torch.cat([ctx[:, 3:], pred], dim=1)
+            hist.push(pred)
             if (k + 1) % 150 == 0:
                 print(f"  rollout batch {b0 // r['batch'] + 1}: step {k + 1}/{H} ({time.time() - t0:.0f}s)")
     return jobs, preds
