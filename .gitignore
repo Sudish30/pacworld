@@ -16,3 +16,4 @@ data/
 .env.*
 outputs/
 logs/
+eval/results/
