@@ -32,8 +32,15 @@ def parse_args():
 
 
 def pick_device(name):
-    if name == "mps" and not torch.backends.mps.is_available():
-        print("warning: MPS not available, falling back to CPU")
+    """'auto' picks cuda, then mps, then cpu; an explicit name is honoured if available."""
+    if name == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+        if torch.backends.mps.is_available():
+            return torch.device("mps")
+        return torch.device("cpu")
+    if name == "cuda" and not torch.cuda.is_available() or name == "mps" and not torch.backends.mps.is_available():
+        print(f"warning: {name} not available, falling back to CPU")
         return torch.device("cpu")
     return torch.device(name)
 
