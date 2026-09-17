@@ -177,33 +177,53 @@ class MazeReference:
         m, r = self.wall_mask(frame64), self.wall_ref & self.wall_eval
         return (m & r).sum() / max((m | r).sum(), 1)
 
-    def sprites(self, frame64, presence=None):
-        """dict name -> (row, col, weight) or None, for pac, red, pink, cyan, orange, frightened.
+    def unmix(self, frame64, presence=None):
+        """Per-pixel sprite unmixing against every sprite colour variant.
 
-        Residual against the expected background; per-pixel two-colour unmixing against every
-        sprite colour variant gives a class-agnostic sprite mask; each connected blob is then
-        classified from its core (highest-residual) pixels, whose colour is close to pure.
+        Returns (accept, best_class, best_alpha, magnitude): a boolean mask of pixels that
+        read as sprite rather than background, the sprite class each belongs to, its blend
+        coverage, and the residual magnitude.
         """
         d = self.cfg
         f = frame64.astype(float)
         if presence is None:
             presence = self.pellet_presence(frame64)
         exp = self.expected_background(presence)
-        resid = f - exp                                                    # (64, 64, 3)
+        resid = f - exp
         mag = np.linalg.norm(resid, axis=-1)
-        cand = mag > d["residual_threshold"]
         diff = VARIANT_COLS[None, None] - exp[:, :, None, :]               # (64, 64, V, 3)
         alpha = np.clip((resid[:, :, None, :] * diff).sum(-1) / np.maximum((diff * diff).sum(-1), 1e-6), 0, 1)
         fit = np.linalg.norm(resid[:, :, None, :] - alpha[..., None] * diff, axis=-1)
         best = fit.argmin(-1)
-        best_fit = fit.min(-1)
         best_alpha = np.take_along_axis(alpha, best[..., None], -1)[..., 0]
-        accept = cand & (best_fit < d["fit_threshold"]) & (best_alpha >= d["min_alpha"])
+        accept = (mag > d["residual_threshold"]) & (fit.min(-1) < d["fit_threshold"]) & (best_alpha >= d["min_alpha"])
+        return accept, np.array(VARIANT_CLASS, dtype=object)[best], best_alpha, mag
+
+    def ghost_mass(self, frame64, presence=None):
+        """Alpha-weighted coverage of ghost-coloured pixels: dict per ghost plus 'total'.
+
+        Unlike sprites(), this does not require a blob to survive the size test, so it
+        measures how much ghost colour is on screen even when it has smeared apart.
+        """
+        accept, cls, alpha, _ = self.unmix(frame64, presence)
+        out = {g: float(alpha[accept & (cls == g)].sum()) for g in GHOST_NAMES}
+        out["frightened"] = float(alpha[accept & (cls == "frightened")].sum())
+        out["total"] = float(sum(out[g] for g in GHOST_NAMES))
+        return out
+
+    def sprites(self, frame64, presence=None):
+        """dict name -> (row, col, weight) or None, for pac, red, pink, cyan, orange, frightened.
+
+        Residual against the expected background; per-pixel two-colour unmixing gives a
+        class-agnostic sprite mask; each connected blob is then assigned by an
+        alpha-weighted vote of its pixels' labels, splitting only where two sprites overlap.
+        """
+        d = self.cfg
+        accept, best_class, best_alpha, mag = self.unmix(frame64, presence)
         out = {name: None for name in SPRITES}
         if not accept.any():
             return out
         lab, sizes = _components(accept)
-        best_class = np.array(VARIANT_CLASS, dtype=object)[best]           # per-pixel class label
         classes = list(SPRITES)
         for k in range(1, len(sizes) + 1):
             mm = lab == k
