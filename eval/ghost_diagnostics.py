@@ -46,15 +46,22 @@ def _init(cfg):
 
 
 def _analyse(frames):
-    """Per frame: per-ghost detected (T, 4) and total ghost pixel mass (T,)."""
+    """Per frame: per-ghost detected (T, 4), total ghost pixel mass (T,), ghost positions (T, 4, 2), Pac-Man (T, 2)."""
     det = np.zeros((len(frames), len(D.GHOST_NAMES)), bool)
     mass = np.zeros(len(frames))
+    pos = np.full((len(frames), len(D.GHOST_NAMES), 2), np.nan)
+    pac = np.full((len(frames), 2), np.nan)
     for t, f in enumerate(frames):
         pres = _REF.pellet_presence(f)
         s = _REF.sprites(f, pres)
-        det[t] = [s[g] is not None for g in D.GHOST_NAMES]
+        for gi, g in enumerate(D.GHOST_NAMES):
+            if s[g] is not None:
+                det[t, gi] = True
+                pos[t, gi] = s[g][:2]
+        if s["pac"] is not None:
+            pac[t] = s["pac"][:2]
         mass[t] = _REF.ghost_mass(f, pres)["total"]
-    return det, mass
+    return det, mass, pos, pac
 
 
 def run_condition(cfg, predictor, eps, device, seed, horizon, teacher, batch):
@@ -111,6 +118,8 @@ def main():
     p.add_argument("--batch", type=int, default=30)
     p.add_argument("--workers", type=int, default=16)
     p.add_argument("--smooth", type=int, default=21)
+    p.add_argument("--ctx-sigmas", type=float, nargs="*", default=[0.01, 0.03, 0.05, 0.1],
+                   help="inference context noise levels to sweep at 3 sampler steps")
     a = p.parse_args()
     cfg = load_config(a.config)
     out = ROOT / cfg["out_dir"] / "ghost_diag"
@@ -136,22 +145,25 @@ def main():
     from model1 import karras_schedule
     dd = predictor.d
 
-    conditions = [("teacher-forced, 3 steps", True, 3), ("autoregressive, 3 steps", False, 3),
-                  ("autoregressive, 10 steps", False, 10), ("autoregressive, 20 steps", False, 20)]
+    conditions = [("teacher-forced, 3 steps", True, 3, 0.0), ("autoregressive, 3 steps", False, 3, 0.0),
+                  ("autoregressive, 10 steps", False, 10, 0.0), ("autoregressive, 20 steps", False, 20, 0.0)]
+    conditions += [(f"autoregressive, 3 steps, ctx sigma {sg}", False, 3, sg) for sg in a.ctx_sigmas]
 
     with Pool(a.workers, initializer=_init, initargs=(cfg,)) as pool:
         # ground truth, per rollout (each rollout inherits its episode's ground truth)
         gt = pool.map(_analyse, [e["frames"][start:start + H] for e in eps])
         elig = [M.ghost_eligibility(e["ram"], cfg)[start:start + H] for e in eps]
         results = {}
-        for name, teacher, steps in conditions:
+        for name, teacher, steps, ctx_sigma in conditions:
             predictor.sigmas = karras_schedule(steps, dd["sigma_min"], dd["sigma_max"], dd["rho"], device)
+            predictor.ctx_sigma = float(ctx_sigma)
             import time
             t0 = time.time()
             jobs, preds = run_condition(cfg, predictor, eps, device, a.seed, H, teacher, a.batch)
             print(f"\n{name}: {len(jobs)} rollouts x {H} steps sampled in {time.time() - t0:.0f}s; analysing frames ...")
             per = pool.map(_analyse, [preds[j] for j in range(preds.shape[0])])
-            results[name] = {"jobs": jobs, "det": np.stack([d for d, _ in per]), "mass": np.stack([m for _, m in per])}
+            results[name] = {"jobs": jobs, "det": np.stack([x[0] for x in per]), "mass": np.stack([x[1] for x in per]),
+                             "pos": np.stack([x[2] for x in per]), "pac": np.stack([x[3] for x in per])}
             del preds
 
     jobs = results[conditions[0][0]]["jobs"]
@@ -159,6 +171,13 @@ def main():
     E = np.stack([elig[ei] for ei in ep_of])                       # (30, H) eligible steps
     gt_det = np.stack([gt[ei][0] for ei in ep_of])                 # (30, H, 4)
     gt_mass = np.stack([gt[ei][1] for ei in ep_of])                # (30, H)
+    raw = {"episode_seed": np.array([eps[ei]["seed"] for ei in ep_of]), "rollout_seed": np.array([s_ for _, s_ in jobs]),
+           "eligible": E, "gt_det": gt_det, "gt_mass": gt_mass, "gt_pos": np.stack([gt[ei][2] for ei in ep_of]),
+           "conditions": np.array(list(results)), "start": start, "horizon": H}
+    for ci, name in enumerate(results):
+        for key in ("det", "mass", "pos", "pac"):
+            raw[f"c{ci}_{key}"] = results[name][key]
+    np.savez_compressed(out / "raw.npz", **raw)
 
     def ratio_curve(mass):
         num = np.where(E, mass, 0).sum(0)
@@ -207,16 +226,18 @@ def main():
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     steps = np.arange(1, H + 1)
-    fig, ax = plt.subplots(figsize=(7.5, 4.6))
+    fig, ax = plt.subplots(figsize=(9, 5.2))
     for i, name in enumerate(results):
-        ax.plot(steps, 100 * smooth(ratio_curve(results[name]["mass"]), a.smooth), label=name, color=f"C{i}", lw=1.8)
-    ax.axhline(100, color="k", ls="--", lw=1, label="ground truth")
+        sweep = "ctx sigma" in name
+        ax.plot(steps, 100 * smooth(ratio_curve(results[name]["mass"]), a.smooth), label=name, color=f"C{i}",
+                lw=1.4 if sweep else 1.9, ls="--" if sweep else "-")
+    ax.axhline(100, color="k", ls=":", lw=1, label="ground truth")
     ax.set_xlabel("rollout step (15 steps = 1 s)")
     ax.set_ylabel("ghost pixel mass, % of ground truth")
     ax.set_title("Ghost colour surviving the rollout, Model 1 EMA @100k")
     ax.set_ylim(0, 130)
     ax.grid(alpha=0.3)
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=7.5, ncol=2, loc="lower left")
     fig.tight_layout()
     fig.savefig(out / "ghost_mass_fraction.png", dpi=140)
     plt.close(fig)
@@ -224,6 +245,8 @@ def main():
     fig, axes = plt.subplots(1, 4, figsize=(16, 4), sharey=True)
     for gi, (g, ax) in enumerate(zip(D.GHOST_NAMES, axes)):
         for i, name in enumerate(results):
+            if "ctx sigma" in name:
+                continue
             ax.plot(steps, 100 * smooth(survival(results[name]["det"], gi), a.smooth), color=f"C{i}", lw=1.6,
                     label=name if gi == 0 else None)
         ax.plot(steps, 100 * smooth(survival(gt_det, gi), a.smooth), color="k", ls="--", lw=1.2,
