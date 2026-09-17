@@ -6,16 +6,16 @@ Model 1 (18.8M-param EDM diffusion UNet, 4-frame context, 100k steps on ~200k fr
 - **Data is the binding constraint.** Eval metrics plateaued at ~85k steps: val denoising loss 0.0009 at 75-85k and 0.0008 at 90-100k; single-step grid PSNR 49.5 dB at 80k and 49.5 dB at 100k (48.8-49.6 in between); the 75-step rollout MSE has been flat-to-noisy (0.004-0.008 mean) since ~30k. Source: `logs/model1.log` on the pod (`grep "eval @"`). More steps on 200k frames buys nothing.
 - **The dominant long-horizon failure is a hidden-timer problem.** After the model's *own* respawn events it parks ghosts in the pen indefinitely: median 222 consecutive pen-occupied steps vs a real-game max of 91; 16/30 rollouts park 200+ steps (real 0/30); 23/26 long parking runs begin right after the model's own Pac-Man respawn. Pen release runs on a timer far longer than the 4-step context, so the state that decides "release now" is not observable from the model's input. Numbers: `eval/results/ghost_diag/`, code: `eval/pen_timer_analysis.py`.
 
-## Next experiment (in progress as of this revision)
-Record 2M more steps (same recorder settings, new seeds; the existing 200k stays as-is), then three 100k-step runs on the combined dataset, everything else identical to Model 1:
+## Next experiment (launched 2026-09-17 23:47 UTC, tmux `train2m` on the pod)
+Recorded 2M more steps (`record.py --seed 43`, 3527 episodes / 2,001,949 steps in `data/2m/agent`, 27.7 min; the 200k set is untouched), built `data/cache/frames64_2m.npy` (2,207,564 frames, 27 GB, 3879 episodes), froze `configs/val_episodes_2m.json` (35 original + 353 new = 388 val episodes; 3491 train episodes, 1.95-1.98M windows). `tools/run_2m_queue.sh` runs three 100k-step trainings back to back, everything else identical to Model 1 (seed 0, batch 64, lr 1e-4, 100k steps):
 
 | wandb run | context | question |
 |---|---|---|
 | `m1-2M-ctx4` | 4 consecutive frames | new-data baseline: how much does 10x data buy by itself? |
 | `m1-2M-ctx8` | 8 consecutive frames | does a modestly longer window help? |
-| `m1-2M-ctx6s16` | 6 frames strided 16 steps apart (spans 96 steps) | can the model see the pen timer (real max 91 steps)? |
+| `m1-2M-ctx6s16` | 4 recent + 6 frames strided 16 apart: offsets [-97,-81,-65,-49,-33,-17,-4,-3,-2,-1] | can the model see the pen timer (real max 91 steps, reach 97)? |
 
-Success criterion for the timer hypothesis: pen-occupancy run lengths in `pen_timer_analysis.py` match ground truth (max ~91, no 200+ runs). Val split for the new data: the existing 35 frozen episodes plus 10% of the new episodes, chosen once and saved in `configs/`.
+Measured at launch: 9.4 / 8.5 / 8.0 it/s (ctx4 / ctx8 / ctx6s16), 6.7 GiB VRAM, ~3.0 + 3.3 + 3.5 h = ~10 h total. Check progress: `ssh -p 11398 -i ~/.ssh/id_ed25519 root@213.173.107.231 'cd /workspace/pacworld && cat logs/queue_2m.log && tail -n 2 logs/m1-2M-*.log'`. Checkpoints land in `checkpoints/<run name>/` (Model 1's `checkpoints/model1_ema.pt` is untouched); the demo can be pointed at one with `serve/server.py --checkpoint checkpoints/<run>/model1_ema.pt`. The context rule (offsets, clamp to the episode's first frame, paired actions) lives only in `dataset.gather_context()`; `python dataset.py --config <cfg> --seed 0 --check-windows 12` verifies it on the full cache. Success criterion for the timer hypothesis: pen-occupancy run lengths in `pen_timer_analysis.py` match ground truth (max ~91, no 200+ runs). Val split for the new data: the existing 35 frozen episodes plus 10% of the new episodes, chosen once and saved in `configs/`.
 
 ## Reference (numbered facts)
 1. **Goal**: playable neural world model of Ms. Pac-Man (DIAMOND-style pixel diffusion, 64x64). Conventions are in `CLAUDE.md`; all hyperparameters in `configs/*.yaml`; every script takes `--seed`; every training run logs to wandb.
