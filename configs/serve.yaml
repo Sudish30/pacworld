@@ -1,5 +1,5 @@
-# Playable demo server for Model 1.
-checkpoint: checkpoints/model1_ema.pt
+# Playable demo server. Serving m1-2M-ctx6s16 (strided context: fixes the pen timer); Model 1 is checkpoints/model1_ema.pt.
+checkpoint: checkpoints/m1-2M-ctx6s16/model1_ema.pt
 host: 127.0.0.1          # bind to localhost only; reach it through an SSH tunnel
 port: 8000
 fps: 15                  # server tick rate (data rate: 60 Hz emulator / frame_skip 4)

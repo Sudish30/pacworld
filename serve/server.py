@@ -84,7 +84,6 @@ class World:
         self.lock = threading.Lock()
         self.model, self.model_cfg, self.step = None, None, None
         self.load()
-        self.offsets = context_offsets(self.model_cfg["data"])
         self.dcfg = self.model_cfg["diffusion"]
         self.cache = load_cache(self.model_cfg, mmap=True)   # only a few val frames are read per session
         _, self.val_idx = load_split(self.model_cfg, self.cache["ep_seed"])
@@ -102,6 +101,7 @@ class World:
         model.eval().to(self.device)
         with self.lock:
             self.model, self.model_cfg, self.step = model, ck["cfg"], ck["step"]
+            self.offsets = context_offsets(ck["cfg"]["data"])   # a reloaded checkpoint may use another context layout
         print(f"loaded {path} (training step {self.step})")
         return self.step
 
@@ -159,7 +159,8 @@ async def index():
 @app.get("/status")
 async def status():
     return JSONResponse({**world.stats(), "checkpoint": world.cfg["checkpoint"], "fps_target": world.cfg["fps"],
-                         "sampler_steps": world.cfg["sampler_steps"]})
+                         "sampler_steps": world.cfg["sampler_steps"], "context_offsets": world.offsets,
+                         "ctx_sigma": world.cfg["ctx_sigma"]})
 
 
 @app.post("/reload")
