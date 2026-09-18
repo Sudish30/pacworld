@@ -320,6 +320,8 @@ def main():
                     {"metric": "respawns", "group": "ground truth", "bin": "", "value": sum(len(e) for e in gt_losses)},
                     {"metric": "pen_runs_100plus", "group": "model", "bin": "", "value": len(long_runs)},
                     {"metric": "pen_runs_100plus_after_own_respawn", "group": "model", "bin": "", "value": linked}]
+        for m in metrics:                                     # one column set for every row
+            m.setdefault("released", ""), m.setdefault("at_risk", "")
         write_csv(out / "pen_metrics.csv", metrics + hazard_rows)
 
         axes[2].plot(steps, 100 * smooth(np.nanmean(np.where(valid, m_occ, np.nan), axis=0), a.smooth),
