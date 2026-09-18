@@ -38,6 +38,30 @@ Pods 2 and 3: secure-cloud RTX 4090, 83 GB RAM, 16 vCPU, 40 GB volume, $0.74/h e
 
 The context rule (offsets, clamp to the episode's first frame, paired actions) lives only in `dataset.gather_context()`; `python dataset.py --config <cfg> --seed 0 --check-windows 12` verifies it on the full cache. Success criterion for the timer hypothesis: pen-occupancy run lengths in `pen_timer_analysis.py` match ground truth (max ~91, no 200+ runs). Val split for the new data: the existing 35 frozen episodes plus 10% of the new episodes, chosen once and saved in `configs/`.
 
+## Results of the 2M-dataset runs (evaluated 2026-09-18 21:00-21:50 UTC on `pacworld-eval2`; `eval/results/compare.csv`, per-run folders `eval/results/m1-2M-*/`)
+Same 10 held-out episodes x 3 seeds, start step 100, 3-step Euler, ctx sigma 0, as Model 1.
+
+| metric (step window) | ground truth | Model 1 | ctx4 | ctx8 | **ctx6s16** |
+|---|---|---|---|---|---|
+| pen occupancy 251-450 | 0.475 | 0.77 | 0.71 | 0.81 | **0.43** |
+| longest pen stay, median / max | 78 / 91 | 222 / 373 | 238 / 369 | 324 / 381 | **82 / 148** |
+| rollouts with pen occupied 200+ steps | 0/30 | 16 | 17 | 23 | **0** |
+| dwell after (own) respawn, median | 78 | 183 | 161 | 289 | **63** |
+| release hazard, lag 31-60 / 61-90 / 91-150 | .35 / .40 / 1.0 | .04 / .08 / .05 | .03 / .07 / .16 | .03 / .03 / .07 | **.24 / .58 / 1.0** |
+| detection, released-during-rollout ghosts, 251-450 | 0.99 | 0.20 | 0.26 | 0.21 | **0.51** |
+| detection, never-penned ghosts, 251-450 | 0.99 | 0.90 | 0.88 | 0.94 | 0.81 |
+| ghost count @ 450 (gated) | 4.0 | 1.65 | 2.00 | 1.47 | 2.03 |
+| wall IoU @ 450 | 0.98 | 0.958 | 0.959 | 0.960 | 0.952 |
+| pellet IoU @ 450 | - | 0.839 | 0.848 | 0.829 | 0.843 |
+| Pac-Man error px @ 15 / 150 / 450 | - | 1.8 / 13.1 / 19.5 | 1.3 / 10.3 / 19.0 | 1.4 / 8.3 / 19.1 | 1.9 / 9.7 / **13.7** |
+| responsiveness @ 15 / 150 / 450 | - | .79 / .45 / .30 | .78 / .47 / .37 | .78 / .46 / .38 | .79 / .48 / .39 |
+
+- **Hypothesis A confirmed.** The strided context fixes the pen timer: pen-stay lengths match the real game (median 82 vs 78, no 200+ parking), the release hazard has the real game's shape (everything released by lag 150), and ghosts that go through the pen survive 2.5x better than in any consecutive-context model. 10x data alone (ctx4) does not touch the timer, and 8 consecutive frames makes parking worse (23/30).
+- **10x data helps everything else**: Pac-Man error and responsiveness improve for all three runs; ctx6s16 halves the 450-step Pac-Man error (13.7 vs 19.5 px).
+- **Not solved**: ghost count at 450 is still ~2 of 4 for every model. In ctx6s16 the remaining loss is *not* the pen: released ghosts detect at 51% (Model 1: 20%), but never-penned ghosts drop to 81% (Model 1: 90%) and ghost mass is 47% at step 450. Pen occupancy at 131-250 is still high (0.79 vs 0.46), i.e. it releases on time but sends ghosts back too readily or holds the first release. Next diagnostics: where the never-penned ghosts go in ctx6s16 (fade vs re-pen), and the 10-step sampler (ctx8 recovers to 70% mass with 10 steps).
+- **Regressions**: ctx6s16 wall IoU 0.952 vs 0.958 and Pac-Man error at 15 steps 1.9 vs 1.8 px - small and within one std; pellet IoU unchanged. Nothing else regressed.
+- Demo still serves Model 1 (`checkpoints/model1_ema.pt`, unchanged). To switch: `serve/server.py --checkpoint checkpoints/m1-2M-ctx6s16/model1_ema.pt` (the server seeds a 97-frame history from the val episode, so the first frames of a session match training).
+
 ## Reference (numbered facts)
 1. **Goal**: playable neural world model of Ms. Pac-Man (DIAMOND-style pixel diffusion, 64x64). Conventions are in `CLAUDE.md`; all hyperparameters in `configs/*.yaml`; every script takes `--seed`; every training run logs to wandb.
 2. **Data (200k set)**: 352 episodes / 201,736 steps in `data/agent/` (PPO agent + eps 0.1 / sticky 0.02 exploration, ALE v5 at frameskip 1 with manual skip 4 and max-pool over all 4 raw frames, maze crop 172x160, RAM saved), recorded with `record.py --seed 42`. Alignment check passes; 35 val episodes frozen in `configs/val_episodes.json`; 317 train episodes = 180,930 windows. Raw 210 MB, 64x64 cache 2.4 GB (12,288 bytes/frame, uncompressed).
