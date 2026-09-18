@@ -275,6 +275,53 @@ def main():
             print(f"first model-world respawn: median step {int(np.median(first_resp))} (range {min(first_resp)}-{max(first_resp)}); "
                   f"first ground-truth life loss: median step {int(np.median([e[0] for e in gt_losses if e]))}")
 
+        # release hazard after a respawn: for the pen-occupancy run that begins within [-40, +15] steps of each
+        # respawn, the lag (steps since the run began) at which the pen empties, censored at the horizon.
+        # hazard in a lag bin = releases in the bin / runs still occupied when the bin starts.
+        def dwell_after(events, occ):
+            out_ = []
+            for r in range(R):
+                for k in events[r]:
+                    cands = [(s0, L) for s0, L in runs(occ[r], 1) if -40 <= s0 - k <= 15]
+                    if cands:
+                        s0, L = cands[0]
+                        out_.append((L, s0 + L >= H))          # (length, censored by the horizon)
+            return out_
+
+        hz_bins = [(1, 30), (31, 60), (61, 90), (91, 150), (151, 450)]
+        hazard_rows = []
+        print(f"\n=== pen release hazard after a respawn (releases / runs still occupied at the start of the bin) ===")
+        print(f"{'':22s}" + "".join(f"{f'lag {lo}-{hi}':>16s}" for lo, hi in hz_bins) + f"{'n runs':>8s}{'median dwell':>14s}")
+        for label, ev, oc in (("model (own respawns)", respawns, m_occ), ("ground truth (real)", gt_losses, g_occ)):
+            d = dwell_after(ev, oc)
+            cells = []
+            for lo, hi in hz_bins:
+                at_risk = sum(1 for L, c in d if L >= lo)
+                released = sum(1 for L, c in d if lo <= L <= hi and not c)
+                h = released / at_risk if at_risk else np.nan
+                cells.append(f"{100 * h:5.0f}% ({released}/{at_risk})" if at_risk else f"{'-':>16s}")
+                hazard_rows.append({"metric": "release_hazard", "group": label, "bin": f"{lo}-{hi}", "value": h,
+                                    "released": released, "at_risk": at_risk})
+            med = int(np.median([L for L, _ in d])) if d else -1
+            print(f"{label:22s}" + "".join(f"{c:>16s}" for c in cells) + f"{len(d):>8d}{med:>14d}")
+            hazard_rows.append({"metric": "dwell_after_respawn_median", "group": label, "bin": "", "value": med, "released": len(d), "at_risk": len(d)})
+            hazard_rows.append({"metric": "dwell_after_respawn_censored", "group": label, "bin": "", "value": sum(c for _, c in d), "released": len(d), "at_risk": len(d)})
+
+        # machine-readable decision metrics for eval/compare_runs.py
+        metrics = [{"metric": "pen_occupancy", "group": "ground truth", "bin": f"{lo}-{hi}", "value": g_occ[:, lo - 1:hi][valid[:, lo - 1:hi]].mean()} for lo, hi in bins]
+        metrics += [{"metric": "pen_occupancy", "group": "model", "bin": f"{lo}-{hi}", "value": m_occ[:, lo - 1:hi][valid[:, lo - 1:hi]].mean()} for lo, hi in bins]
+        metrics += [{"metric": "longest_pen_run_median", "group": "ground truth", "bin": "", "value": float(np.median(gl))},
+                    {"metric": "longest_pen_run_median", "group": "model", "bin": "", "value": float(np.median(ml))},
+                    {"metric": "longest_pen_run_max", "group": "ground truth", "bin": "", "value": max(gl)},
+                    {"metric": "longest_pen_run_max", "group": "model", "bin": "", "value": max(ml)},
+                    {"metric": "rollouts_pen_200plus", "group": "ground truth", "bin": "", "value": sum(x >= 200 for x in gl)},
+                    {"metric": "rollouts_pen_200plus", "group": "model", "bin": "", "value": sum(x >= 200 for x in ml)},
+                    {"metric": "respawns", "group": "model", "bin": "", "value": sum(len(e) for e in respawns)},
+                    {"metric": "respawns", "group": "ground truth", "bin": "", "value": sum(len(e) for e in gt_losses)},
+                    {"metric": "pen_runs_100plus", "group": "model", "bin": "", "value": len(long_runs)},
+                    {"metric": "pen_runs_100plus_after_own_respawn", "group": "model", "bin": "", "value": linked}]
+        write_csv(out / "pen_metrics.csv", metrics + hazard_rows)
+
         axes[2].plot(steps, 100 * smooth(np.nanmean(np.where(valid, m_occ, np.nan), axis=0), a.smooth),
                      color="C1", lw=1.9, label="model (autoregressive, 3 steps)")
         axes[2].plot(steps, 100 * smooth(np.nanmean(np.where(valid, g_occ, np.nan), axis=0), a.smooth), color="k", ls="--", lw=1.4, label="ground truth")

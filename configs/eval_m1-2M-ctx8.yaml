@@ -1,0 +1,48 @@
+# Rollout evaluation harness (eval/eval_rollouts.py) for m1-2M-ctx8: identical to eval.yaml except the
+# checkpoint and the output folder, so the same 10 held-out episodes x 3 seeds are used for every model.
+data:
+  folder: data/agent
+  val_episodes: configs/val_episodes.json
+  size: 64
+  context: 4
+
+rollout:
+  n_episodes: 10           # the N longest held-out episodes
+  seeds: 3                 # sampler noise seeds per episode (Model 0 is deterministic)
+  start_step: 100          # context = frames start-4 .. start-1, first predicted frame = start
+  horizon: 900             # 60 s at 15 steps/s
+  gated_horizons: [15, 150, 450]     # metrics that need ground truth / RAM gating
+  ungated_horizons: [900]            # ground-truth-free metrics only, flagged in the output
+  window: 8                # instantaneous metrics are averaged over the last `window` steps up to the horizon
+  batch: 30                # rollouts sampled together in one batch
+
+model1:
+  checkpoint: checkpoints/m1-2M-ctx8/model1_ema.pt   # the predictor reads the context layout from the checkpoint
+  sampler_steps: 3
+  ctx_sigma: 0.0
+  bf16: true
+model0:
+  checkpoint: checkpoints/model0.pt
+
+detector:
+  residual_threshold: 20   # |frame - expected background| above this = candidate sprite pixel
+  fit_threshold: 18        # max residual of the two-colour blend fit to accept a sprite colour
+  min_alpha: 0.25          # min blend coverage of the sprite colour in a pixel
+  min_blob_weight: 0.8     # min total coverage of the best blob to count a sprite as present
+  pellet_present_frac: 0.5 # pellet present if its pinkness >= this fraction of its reference
+  wall_pinkness: 0.5
+
+gating:                    # ghost-metric eligibility from RAM (mirrors tools/ghost_visibility.py)
+  frightened_ram: 116      # nonzero while ghosts are frightened
+  lives_ram: 123
+  start_of_life_steps: 90
+  death_anim_steps: 12
+
+responsiveness:
+  direction_ram: 56        # ram[56] & 3: 0 up, 1 right, 2 down, 3 left
+  response_window: 2       # steps allowed for the model's Pac-Man to turn
+  smooth_steps: 2          # movement direction from position delta over this many steps
+  min_move_px: 0.75        # smaller deltas count as not moving
+  max_move_px: 20          # larger deltas are tunnel wraps and are ignored
+
+out_dir: eval/results/m1-2M-ctx8
