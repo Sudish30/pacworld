@@ -11,6 +11,9 @@
 set -uo pipefail
 RUN=$1; P1HOST=$2; P1PORT=$3
 cd "$(dirname "$0")/.." || exit 1
+# RunPod exposes the pod's env (RUNPOD_POD_ID, RUNPOD_API_KEY, ...) to shells through this file;
+# a tmux command is a non-interactive shell and does not get it from .bashrc.
+[ -f /etc/rp_environment ] && source /etc/rp_environment
 P1="ssh -p $P1PORT -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30"
 log() { echo "[sync $(date -u +%FT%TZ)] $*" | tee -a "logs/sync_$RUN.log"; }
 mkdir -p logs
@@ -37,6 +40,7 @@ $P1 "root@$P1HOST" "touch /workspace/pacworld/logs/$RUN.done" || true
 
 if [ -n "${RUNPOD_API_KEY:-}" ] && [ -n "${RUNPOD_POD_ID:-}" ]; then
   log "stopping pod $RUNPOD_POD_ID"
+  runpodctl config --apiKey "$RUNPOD_API_KEY" >/dev/null 2>&1   # the pod's runpodctl reads the key from its config file
   runpodctl stop pod "$RUNPOD_POD_ID" 2>&1 | tee -a "logs/sync_$RUN.log"
 else
   log "RUNPOD_API_KEY / RUNPOD_POD_ID not set: stop this pod by hand (runpodctl stop pod <id> or the RunPod console)"
