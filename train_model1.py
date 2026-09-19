@@ -189,6 +189,21 @@ def main():
     opt = torch.optim.AdamW(model.parameters(), lr=tr["lr"], weight_decay=tr["weight_decay"])
     ema = EMA(model, tr["ema_decay"])
     step = 0
+    init_from = (cfg.get("finetune") or {}).get("init_from")
+    if init_from and not args.resume:
+        # fine-tuning: weights (live and EMA) from another run, fresh optimizer, step 0. The source is only read.
+        if Path(init_from).resolve().parent == Path(tr["checkpoint_dir"]).resolve():
+            raise SystemExit("finetune.init_from must not live in this run's checkpoint_dir")
+        ck = torch.load(init_from, map_location=device)
+        if ck["cfg"]["data"].get("context_offsets") != cfg["data"].get("context_offsets") or ck["cfg"]["data"]["context"] != cfg["data"]["context"]:
+            raise SystemExit("finetune.init_from was trained with a different context layout")
+        model.load_state_dict(ck["model"])
+        ema.module.load_state_dict(ck["ema"])
+        print(f"fine-tuning from {init_from} (its step {ck['step']}); optimizer and step counter start fresh")
+    ecfg = cfg.get("events")
+    if ecfg:
+        n_ev = train.set_event_targets(np.load(ecfg["index"]), ecfg["kinds"], ecfg["radius"])
+        print(f"event windows: {dict(zip(ecfg['kinds'], n_ev))} targets within +-{ecfg['radius']} steps; {ecfg['frac']:.0%} of every batch, split evenly over the kinds")
     if args.resume:
         ck = torch.load(args.resume, map_location=device)
         model.load_state_dict(ck["model"])
@@ -219,7 +234,7 @@ def main():
         for pg in opt.param_groups:
             pg["lr"] = lr
 
-        ctx, acts, tgt = train.sample(tr["batch_size"], gen)
+        ctx, acts, tgt = train.sample_mixed(tr["batch_size"], gen, ecfg["frac"]) if ecfg else train.sample(tr["batch_size"], gen)
         ctx, acts, tgt = ctx.to(device, non_blocking=True), acts.to(device), tgt.to(device, non_blocking=True)
         ctx, ctx_sigma = noise_context(ctx, ccfg, gen, device, train=True)
         sigma = sample_sigmas(d["p_mean"], d["p_std"], tgt.shape[0], "cpu", gen).to(device)

@@ -207,6 +207,30 @@ class WindowDataset:
         pick = torch.randint(len(self.targets), (batch_size,), generator=generator)
         return self.get(self.targets[pick])
 
+    def set_event_targets(self, index, kinds, radius):
+        """Targets within `radius` steps of an event (one pool per kind), restricted to this dataset's own targets
+        and to the event's episode. index: npz from tools/build_event_index.py."""
+        own = set(self.targets.tolist())
+        self.event_pools = []
+        for kind in kinds:
+            ev, ep = index[kind], index[kind + "_ep"]
+            lo = np.maximum(ev - radius, self.ep_start.numpy()[ep])
+            hi = np.minimum(ev + radius, self.ep_start.numpy()[ep + 1] - 1)
+            t = np.unique(np.concatenate([np.arange(a, b + 1) for a, b in zip(lo, hi)])) if len(ev) else np.zeros(0, np.int64)
+            t = np.array([x for x in t.tolist() if x in own], dtype=np.int64)
+            if not len(t):
+                raise SystemExit(f"no event targets of kind {kind} in this split")
+            self.event_pools.append(torch.from_numpy(t))
+        return [len(t) for t in self.event_pools]
+
+    def sample_mixed(self, batch_size, generator, frac):
+        """A batch with round(frac * batch_size) event windows, split evenly over the event kinds; the rest uniform."""
+        n_ev = int(round(frac * batch_size))
+        per = [n_ev // len(self.event_pools) + (1 if i < n_ev % len(self.event_pools) else 0) for i in range(len(self.event_pools))]
+        picks = [pool[torch.randint(len(pool), (n,), generator=generator)] for pool, n in zip(self.event_pools, per)]
+        picks.append(self.targets[torch.randint(len(self.targets), (batch_size - n_ev,), generator=generator)])
+        return self.get(torch.cat(picks))
+
     def fixed_batches(self, batch_size, n_batches, seed):
         g = torch.Generator().manual_seed(seed)
         pick = torch.randperm(len(self.targets), generator=g)[: batch_size * n_batches]

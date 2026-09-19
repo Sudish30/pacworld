@@ -3,14 +3,15 @@
 Reads the teacher-forced detections in each run's ghost_diag/raw.npz and the RAM frightened timer. A lag of +1 step
 means the model never predicts the end of a phase: it only copies it once a real coloured frame is in its context.
 
-  python eval/tf_phase_end.py
+  python eval/tf_phase_end.py [eval config ...]
 """
 import sys, numpy as np
 sys.path.insert(0, "."); sys.path.insert(0, "eval")
 from common import load_config
 from dataset import episode_path
 from pathlib import Path
-for run, cfgp in (("m1-2M-ctx6s16", "configs/eval_m1-2M-ctx6s16.yaml"), ("m1-2M-ctx-r148", "configs/eval_m1-2M-ctx-r148.yaml"), ("model1", "configs/eval.yaml")):
+CONFIGS = sys.argv[1:] or ["configs/eval_m1-2M-ctx6s16.yaml", "configs/eval_m1-2M-ctx-r148.yaml", "configs/eval.yaml"]
+for run, cfgp in ((Path(c).stem[5:] if Path(c).stem.startswith("eval_") else "model1", c) for c in CONFIGS):
     cfg = load_config(cfgp)
     z = np.load(Path(cfg["out_dir"]) / "ghost_diag" / "raw.npz", allow_pickle=True)
     names = list(z["conditions"]); ci = names.index("teacher-forced, 3 steps")
