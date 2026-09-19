@@ -247,6 +247,31 @@ class MazeReference:
         return out
 
 
+def _frightened_blobs(self, frame64, presence=None):
+    """Every frightened (blue) ghost in the frame: list of (row, col, weight), one per connected blue blob.
+
+    sprites() keeps only the heaviest blob of a class, which is right for the four coloured ghosts (one each)
+    but not for frightened ghosts, which all share one colour. Two overlapping blue ghosts form one blob; callers
+    that need a count divide the weight by a single ghost's typical weight.
+    """
+    accept, best_class, best_alpha, _ = self.unmix(frame64, presence)
+    mask = accept & (best_class == "frightened")
+    out = []
+    if mask.any():
+        lab, sizes = _components(mask)
+        for k in range(1, len(sizes) + 1):
+            mm = lab == k
+            w = best_alpha[mm]
+            weight = float(w.sum())
+            if weight >= self.cfg["min_blob_weight"]:
+                r, c = np.nonzero(mm)
+                out.append((float((r * w).sum() / weight), float((c * w).sum() / weight), weight))
+    return out
+
+
+MazeReference.frightened_blobs = _frightened_blobs
+
+
 def native_sprite_centroid(native_frame, col, min_px=10):
     m = _exact(native_frame, col, allow_bg_blue=True)
     if m.sum() < min_px:
