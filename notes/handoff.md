@@ -71,6 +71,24 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## VERDICT on `m1-2M-ctx6s16-ft-events` (scored 2026-09-19 22:30 UTC with the rules fixed in e936127): DOES NOT PASS - demo stays on ctx6s16
+Run: 15,000 steps in 31.7 min, wandb `ylr4t3du`, final val denoise 0.0006; parent checkpoints verified byte-identical afterwards (sha256 check OK). Data fact: the 2.2M-frame set contains only 1,082 frightened-phase ends (0.28 per episode; 16,660 train targets within +-8 steps = 0.85% of windows, enriched ~15x by the 12.5% quota); pen-release windows are already ~25% of all windows, so their quota changed nothing. Results: `eval/results/m1-2M-ctx6s16-ft-events/`, `eval/results/compare_ft_events.csv`, `logs/eval_ft.log`.
+
+| item | rule | ctx6s16 | ft-events | verdict |
+|---|---|---|---|---|
+| P1 frightened phases (900-step rollouts, began >= 140 steps before the end) | >= 75% end after 120-136 steps, none blue > 136 | 1 of 13 in range, 5 never ended, median 294 | **0 of 10 in range**: five ended EARLY (11, 21, 48, 82, 84 steps), three late (243, 244, 346), two still blue (244+, 258+); median of ended 83 | **FAIL** |
+| P2 teacher-forced flip lag | < +0.5 steps, premature colour <= 0.50 | +1.0, 0.50 | **+0.6**, 0.50 | **FAIL (narrowly)** |
+| gate: longest pen stay median | 70-95 | 82 (real 78) | **66.5** | **FAIL (too short)** |
+| gate: parked 200+ / hazard at lag 91-150 | 0/30, >= 0.90 | 0, 1.00 | 0, 1.00 | pass |
+| gate: released within 150 steps (orange / cyan / pink) | >= 95 / 90 / 80% | 100 / 97 / 89%, medians 65 / 104 / 116 | 100 / 96 / 95%, medians **48 / 88 / 107** (real 43 / 82 / 96) | pass |
+| gate: wall IoU, pellet IoU @450 | >= 0.943, >= 0.792 | 0.952, 0.843 | 0.952, 0.845 | pass |
+| gate: Pac-Man error, responsiveness @450 | <= 23.8 px, >= 0.317 | 13.7, 0.385 | 18.2, 0.438 | pass |
+
+Not gating: ghost count ORIGINAL / FAIR gating - steps 131-250: 2.99 / 3.55 (ctx6s16 2.70 / 3.23); steps 251-450: 2.50 / 3.16 (2.49 / 3.49); last 8 steps to 450: 2.61 / 3.60 (2.03 / 3.53). Drift-candidate disappearances 37 (70), own respawns 66 with 92% real collisions.
+- **Reading:** enrichment taught the model THAT phases end but not WHEN: the hazard of ending is now spread over the whole phase (the pre-registered risk). The teacher-forced lag moved from +1.0 to +0.6, i.e. roughly 40% of real phase ends are now predicted on the right step. With 980 training examples of a one-frame event the timing signal is still weak; and at 16-step far-frame resolution the phase start is only known to +-8 steps even in principle.
+- **What did improve:** release timing is now close to the real game (48 / 88 / 107 vs 43 / 82 / 96) and the release hazard is steeper. Confound: this may be the low-LR fine-tune itself (the parent trained at constant LR, so 15k steps at 1e-5 acts as an LR decay) rather than the event diet, since pen-release windows were not actually enriched. A control fine-tune with uniform sampling would separate the two.
+- **Candidates (not started):** (a) the uniform-sampling control; (b) give the model the timer instead of asking it to infer it - a steps-since-phase-start scalar or finer far-context resolution around 124-134 steps; (c) more frightened-phase data (a recorder policy that eats power pellets), since 1,082 phase ends is the binding constraint.
+
 ## PRE-REGISTRATION: `m1-2M-ctx6s16-ft-events` (written 2026-09-19 before the run exists; scoring rules fixed here)
 **What:** fine-tune `checkpoints/m1-2M-ctx6s16/model1_latest.pt` (live + EMA weights, read only; fresh AdamW, step counter from 0, 100 warm-up steps) for 15,000 steps at lr 1e-5 (parent: 1e-4), batch 64, same context layout, cache and frozen split. Every batch: 25% event windows = targets within +-8 steps of an event, split evenly between frightened-phase ends (RAM 116: >0 -> 0) and pen releases (RAM ghost position leaves the pen), train episodes only; 75% uniform as before. Event index: `tools/build_event_index.py` -> `data/cache/events_2m.npz`. Own `checkpoints/m1-2M-ctx6s16-ft-events/`, `outputs/...`, `eval/results/...`. Rationale: `eval/tf_phase_end.py` showed no model predicts the one-frame phase end (always +1 step behind real context); the event is ~0.05% of uniform windows.
 
