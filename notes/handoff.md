@@ -71,6 +71,16 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## Run in progress: `m1-2M-ctx-r148` (launched 2026-09-19 ~07:50 UTC on `pacworld-eval2`, tmux `train2m`) - PREDICTION WRITTEN BEFORE ANY RESULT EXISTS
+Context = 4 recent + 9 frames strided 16 apart, offsets `[-145, -129, -113, -97, -81, -65, -49, -33, -17, -4, -3, -2, -1]`. True reach is **145** steps (the name says 148; the far frames keep ctx6s16's positions so the layout is a strict superset of ctx6s16's). Everything else identical to the other 2M runs: same 2.2M-frame cache, frozen split `configs/val_episodes_2m.json` (sha256 7ba75f89..., commit a7ea0d5), seed 0, 100k steps, own `checkpoints/m1-2M-ctx-r148/` and `outputs/m1-2M-ctx-r148/`.
+
+**Prediction (to be tested against `eval/fair_ghosts.py` + the standard eval, compared with ctx6s16):**
+1. Frightened phases end within the real 124-134-step range (ctx6s16: ended phases 113-394 steps, median 294, 5 of 13 never ended within 900 steps).
+2. Releases stay on time: first in-maze sighting after a life loss about orange 65 / cyan 104 / pink 116 steps or better (real 43 / 82 / 96), 89-100% released within 150 steps.
+3. Pen metrics stay at ctx6s16 levels: longest pen stay median ~82 (real 78), 0/30 rollouts parked 200+ steps, release hazard reaching 1.0 by lag 91-150, pen occupancy 251-450 ~0.43 (real 0.48).
+What would falsify it: frightened phases still 2-3x too long or never ending (then reach is not the limiting factor - e.g. the phase start is not visually marked strongly enough at 16-step resolution), or pen metrics regressing because 13 context frames dilute the recent ones.
+Evaluate tomorrow: `configs/eval_m1-2M-ctx-r148.yaml` with `eval_rollouts.py --save-all-preds`, `ghost_diagnostics.py`, `pen_timer_analysis.py`, `residual_ghosts.py`, `fair_ghosts.py`, then `compare_runs.py` with ctx6s16.
+
 ## Fair ghost accounting, frightened timer, drift test, respawn causes (`eval/fair_ghosts.py`, 2026-09-19; logs `logs/fair_*.log`, CSVs `eval/results/<run>/ghost_diag/fair_*.csv`)
 The detector now has a frightened-blue class for counting (`MazeReference.frightened_blobs`; on the real game: a blue blob in 91% of RAM-frightened frames, 0.00% false positives; pixel-timed real phases 122-129 vs RAM 124-131 steps).
 - **Headline ghost count, both gatings (never replace the original):** ORIGINAL = ground-truth-RAM eligibility, coloured ghosts only (this is `summary.csv`). FAIR = additionally drops 12 steps before to 90 steps after each of the MODEL'S OWN respawns, and counts blue ghosts as present.
