@@ -71,6 +71,25 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## ANSWER from the control `m1-2M-ctx6s16-ft-uniform` (2026-09-20 02:18 UTC, rule fixed in 8217238): the release-timing gain was the LR ANNEAL, not the event diet
+15,000 steps in 30.6 min, uniform sampling, parent checkpoints byte-identical afterwards. Results: `eval/results/m1-2M-ctx6s16-ft-uniform/`, `eval/results/compare_ft_uniform.csv`, `logs/eval_ftu.log`.
+
+| measure (real game) | ctx6s16 | ft-events | **ft-uniform (control)** | closer to |
+|---|---|---|---|---|
+| median first sighting after a life loss, orange (43) | 65 | 48 | **44** | ft-events |
+| cyan (82) | 104 | 88 | **89** | ft-events |
+| pink (96) | 116 | 107 | **105** | ft-events |
+| released within 150 steps, orange / cyan / pink | 100 / 97 / 89% | 100 / 96 / 95% | 100 / 100 / 96% | ft-events |
+| longest pen stay, median (78) | 82 | 66.5 | 70 | ft-events |
+| release hazard, lag 31-60 / 61-90 (0.35 / 0.40) | 0.24 / 0.58 | 0.43 / 0.84 | 0.46 / 0.87 | ft-events |
+| teacher-forced frightened flip lag | +1.0 | +0.6 | **+1.0** | ctx6s16 |
+| frightened phases, ended (median; n ended / never ended in 900 steps) | 294; 8 / 5 | 83; 8 / 3 | 121; 7 / 3 (lengths 43, 71, 114, 121, 140, 181, 362) | - |
+
+- **3 of 3 ghosts are closer to ft-events, so by the pre-set rule the better release timing comes from the low-LR fine-tune** (the parent trained at constant 1e-4; 15k steps at 1e-5 acts as the missing LR decay). Every supporting pen measure agrees.
+- **The event diet's own contribution is the teacher-forced phase-end lag** (+1.0 -> +0.6 only with enrichment; the control stays at +1.0) and the tendency to end frightened phases early (median 83). Without enrichment the phases that do end cluster nearer the real length (median 121) but 1 of 8 resolvable phases meets the 120-136 rule, so the frightened timer is still unsolved either way; n is small.
+- **The control is the best model so far on most metrics** (not pre-registered for a demo switch, and none was made): ghost count ORIGINAL / FAIR gating at 131-250 3.05 / 3.69 and at 251-450 2.82 / 3.36 (ctx6s16 2.70 / 3.23 and 2.49 / 3.49; ft-events 2.99 / 3.55 and 2.50 / 3.16); wall IoU 0.955, pellet IoU 0.845, Pac-Man error @450 14.6 px, responsiveness @450 0.43, drift-candidate disappearances 28 (70 / 37), own respawns 65 with 91% real collisions. It also passes every item of the ft-events forgetting gate (longest pen stay median 70 is inside 70-95).
+- **Consequence for any future run:** end training with an LR decay; the constant-LR recipe leaves easy gains on the table. No further training was started (per instruction). The demo still serves ctx6s16.
+
 ## CONTROL `m1-2M-ctx6s16-ft-uniform` - question and decision rule written before the run exists (2026-09-19)
 Same 15,000-step fine-tune of ctx6s16 (lr 1e-5, fresh optimizer, same seed, split, layout) with UNIFORM sampling. Question: was ft-events' better release timing caused by the low-LR fine-tune (an LR anneal after constant-LR training) or by the event diet? Decision rule on the median first in-maze sighting after a life loss, orange / cyan / pink (real 43 / 82 / 96): ctx6s16 65 / 104 / 116, ft-events 48 / 88 / 107. For each ghost the control is assigned to whichever it is closer to; two or three ghosts closer to ft-events = LR anneal, two or three closer to ctx6s16 = event diet. Supporting measures read the same way: longest pen stay median (82 vs 66.5), release hazard at lag 31-60 (0.24 vs 0.43) and 61-90 (0.58 vs 0.84), frightened phases (median ended length 294 vs 83), teacher-forced flip lag (+1.0 vs +0.6). No demo change either way; no further training after this.
 
