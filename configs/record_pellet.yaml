@@ -1,0 +1,69 @@
+# Data recording with a power-pellet-seeking bias (more frightened phases). Identical to record.yaml except the seek: section.
+env:
+  id: ALE/MsPacman-v5
+  frameskip: 1             # emulator frames per env.step; we skip manually (see below)
+  repeat_action_probability: 0.0
+  full_action_space: false
+
+# Manual frame skip: repeat each action for frame_skip emulator frames and
+# store the pixel-wise max of the last max_pool_last raw frames. Ms. Pac-Man
+# draws only one ghost per emulator frame, cycling through all four over 4
+# frames, so pooling over 2 frames (the DQN default) shows all four ghosts in
+# only ~29-47% of observations; pooling over all 4 frames shows them in ~99%.
+frame_skip: 4
+max_pool_last: 4
+
+# Rows [top, bottom) of the 210x160 frame that contain the maze.
+# Rows 172+ are the score and lives display.
+crop:
+  top: 0
+  bottom: 172
+
+n_envs: 8
+steps: 200000            # total env steps across all envs before stopping new episodes
+mode: agent              # agent | random
+out_dir: data
+
+# Exploration on top of the PPO agent (agent mode only).
+eps: 0.1                 # probability of a uniformly random action
+sticky_prob: 0.02        # per-step probability of starting a sticky-random segment
+sticky_len: [5, 30]      # inclusive range of sticky segment lengths
+
+agent:
+  hf_repo: sb3/ppo-MsPacmanNoFrameskip-v4
+  hf_file: ppo-MsPacmanNoFrameskip-v4.zip
+  obs_size: 84           # policy was trained on 84x84 grayscale
+  frame_stack: 4
+  device: cpu
+
+playback:
+  scale: 3
+  fps: 15
+  band_px: 14            # height of the text band added below each frame
+
+# Power-pellet seeking (agent mode only). While no frightened phase is active, a power pellet remains and no
+# ghost is close, the recorder walks the shortest path to the nearest remaining power pellet; otherwise the PPO
+# agent acts. It never seeks during a phase: eating another pellet would extend it instead of ending it.
+# eps / sticky exploration above still applies on top.
+seek:
+  enabled: true
+  episode_prob: 0.9        # share of episodes that use seeking at all (the rest are plain PPO episodes)
+  graph: data/cache/maze_graph.npz       # built by tools/build_maze_graph.py
+  graph_from: [data/agent, data/2m/agent]
+  min_edge_count: 3        # ignore position transitions seen fewer times than this
+  max_step: 8              # RAM units per step; larger jumps are respawns or tunnel wraps
+  pac_x_ram: 10
+  pac_y_ram: 16
+  lives_ram: 123
+  frightened_ram: 116
+  ghost_x_ram: [6, 7, 8, 9]
+  ghost_y_ram: [12, 13, 14, 15]
+  ghost_avoid_dist: 20     # L1 RAM distance to a ghost below which the PPO agent takes over
+  power_pellet_reward: 50
+  pellet_radius: 8         # graph positions this close to a pellet count as "at the pellet"
+  snap_radius: 4           # an unseen Pac-Man position is snapped to a graph position this close
+  power_pellets:           # RAM coordinates: pixel blocks at rows 17 / 149, columns 9.5 / 149.5 of the 172x160 frame
+    top_left: [16, 16]
+    top_right: [160, 16]
+    bottom_left: [16, 148]
+    bottom_right: [160, 148]

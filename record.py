@@ -61,6 +61,79 @@ class PPOAgent:
         return actions
 
 
+class PelletSeeker:
+    """Shortest-path walker to the nearest remaining power pellet, on a maze graph mined from recorded RAM."""
+
+    def __init__(self, scfg, n_envs, rng):
+        self.c, self.rng = scfg, rng
+        g = np.load(scfg["graph"])
+        self.out = {}
+        for x0, y0, x1, y1 in g["edges"].astype(int):
+            self.out.setdefault((x0, y0), []).append((x1, y1))
+        self.nodes = np.array(sorted(set(self.out) | {n for v in self.out.values() for n in v}))
+        rev = {}
+        for a, nbrs in self.out.items():
+            for b in nbrs:
+                rev.setdefault(b, []).append(a)
+        self.dist = {}                                    # pellet name -> {position: steps to the pellet}
+        for name, (px, py) in scfg["power_pellets"].items():
+            goal = [tuple(n) for n in self.nodes if abs(n[0] - px) + abs(n[1] - py) <= scfg["pellet_radius"]]
+            d, frontier = {n: 0 for n in goal}, list(goal)
+            while frontier:
+                nxt = []
+                for b in frontier:
+                    for a in rev.get(b, []):
+                        if a not in d:
+                            d[a] = d[b] + 1
+                            nxt.append(a)
+                frontier = nxt
+            self.dist[name] = d
+        self.remaining = [set(scfg["power_pellets"]) for _ in range(n_envs)]
+        self.active = [True] * n_envs
+        self.stats = {"seek_steps": 0, "ppo_steps": 0}
+
+    def reset(self, i):
+        self.remaining[i] = set(self.c["power_pellets"])
+        self.active[i] = self.rng.random() < self.c["episode_prob"]
+
+    def observe(self, i, ram, reward):
+        if reward == self.c["power_pellet_reward"]:
+            x, y = int(ram[self.c["pac_x_ram"]]), int(ram[self.c["pac_y_ram"]])
+            if not self.remaining[i]:                      # a new level refills the maze
+                self.remaining[i] = set(self.c["power_pellets"])
+            near = min(self.remaining[i], key=lambda n: abs(self.c["power_pellets"][n][0] - x) + abs(self.c["power_pellets"][n][1] - y))
+            self.remaining[i].discard(near)
+
+    def action(self, i, ram):
+        """Cardinal action toward the nearest remaining power pellet, or None to let the PPO agent act."""
+        c = self.c
+        if not self.active[i] or not self.remaining[i] or ram[c["frightened_ram"]] > 0:
+            return None
+        x, y = int(ram[c["pac_x_ram"]]), int(ram[c["pac_y_ram"]])
+        gx, gy = ram[c["ghost_x_ram"]].astype(int), ram[c["ghost_y_ram"]].astype(int)
+        if (np.abs(gx - x) + np.abs(gy - y)).min() < c["ghost_avoid_dist"]:
+            return None
+        pos = (x, y)
+        if pos not in self.out:
+            d = np.abs(self.nodes[:, 0] - x) + np.abs(self.nodes[:, 1] - y)
+            j = int(d.argmin())
+            if d[j] > c["snap_radius"]:
+                return None
+            pos = tuple(self.nodes[j])
+        best = None
+        for name in self.remaining[i]:
+            for b in self.out.get(pos, []):
+                db = self.dist[name].get(b)
+                if db is not None and (best is None or db < best[0]):
+                    best = (db, b)
+        if best is None:
+            return None
+        dx, dy = best[1][0] - x, best[1][1] - y
+        if abs(dx) >= abs(dy):
+            return 2 if dx > 0 else 3                      # RIGHT / LEFT
+        return 4 if dy > 0 else 1                          # DOWN / UP (RAM y grows downwards)
+
+
 class EpisodeBuffer:
     def __init__(self, seed, first_frame, first_ram):
         self.seed = seed
@@ -119,6 +192,7 @@ def main():
     n_actions = envs[0].action_space.n
     action_meanings = envs[0].unwrapped.get_action_meanings()
     agent = PPOAgent(cfg, n_envs) if mode == "agent" else None
+    seeker = PelletSeeker(cfg["seek"], n_envs, rng) if mode == "agent" and (cfg.get("seek") or {}).get("enabled") else None
     lo, hi = cfg["sticky_len"]
 
     def new_seed():
@@ -135,6 +209,8 @@ def main():
             agent.reset(i, frame)
         buffers[i] = EpisodeBuffer(s, frame, get_ram(envs[i]))
         sticky[i] = (0, 0)
+        if seeker:
+            seeker.reset(i)
 
     buffers = [None] * n_envs
     sticky = [(0, 0)] * n_envs  # (remaining steps, action)
@@ -165,12 +241,17 @@ def main():
             elif rng.random() < cfg["eps"]:
                 actions[i] = int(rng.integers(n_actions))
             else:
-                actions[i] = int(policy_actions[i])
+                a_seek = seeker.action(i, buffers[i].ram[-1]) if seeker else None
+                actions[i] = int(policy_actions[i]) if a_seek is None else a_seek
+                if seeker:
+                    seeker.stats["ppo_steps" if a_seek is None else "seek_steps"] += 1
 
         for i in active:
             obs, reward, terminated, truncated = skip_step(envs[i], actions[i], cfg)
             frame = crop(obs, cfg)
             buffers[i].step(actions[i], reward, terminated, frame, get_ram(envs[i]))
+            if seeker:
+                seeker.observe(i, buffers[i].ram[-1], reward)
             if agent:
                 agent.observe(i, frame)
             steps_done += 1
@@ -187,6 +268,8 @@ def main():
     dt = time.time() - t0
     print(f"done: {episodes} episodes, {steps_done} steps in {dt/60:.1f} min ({steps_done/dt:.0f} steps/s), "
           f"mean return {np.mean(returns):.0f}")
+    if seeker:
+        print(f"seeking: {seeker.stats['seek_steps']} policy steps walked toward a power pellet, {seeker.stats['ppo_steps']} left to the PPO agent")
 
 
 if __name__ == "__main__":

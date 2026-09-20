@@ -1,0 +1,79 @@
+# m1-3M-r148-ft-fright: candidate (a), theory-favoured: fine-tune of m1-2M-ctx-r148 (13 context frames, reach 145 >= the 124-134-step frightened phase).
+# 15k steps at lr 1e-5 on the 3.2M-frame dataset (2.2M + the pellet-seeking recording), 25% of every batch from
+# windows within +-8 steps of a frightened-phase end. Pre-registered in notes/handoff.md before launch.
+
+data:
+  folder: [data/agent, data/2m/agent, data/pellet/agent]  # + the pellet-seeking recording (record_pellet.yaml, --seed 44)
+  cache: data/cache/frames64_3m.npy    # streamed .npy cache (~39 GB); metadata in frames64_3m_meta.npz
+  cache_mmap: true                     # larger than the pod's 46 GB memory limit: map it, do not load it
+  val_episodes: configs/val_episodes_3m.json   # frozen by tools/freeze_val_split.py: the 388 val episodes of the 2M split + 10% of the pellet episodes
+  val_base: configs/val_episodes_2m.json  # frozen split of the 2.2M set, reused as-is
+  val_new_folder: data/pellet/agent    # val_frac of these episodes join the val split
+  val_frac: 0.1
+  split_seed: 0
+  size: 64
+  context: 13
+  context_offsets: [-145, -129, -113, -97, -81, -65, -49, -33, -17, -4, -3, -2, -1]   # frames before the episode start clamp to its first frame
+
+model:
+  widths: [64, 96, 192, 192]           # at 64 / 32 / 16 / 8 px (~18.8M params)
+  blocks_per_level: 2                  # encoder blocks per level (decoder uses one more)
+  attn_levels: [2, 3]                  # self-attention after every block at 16 and 8 px
+  heads: 4
+  cond_dim: 256
+  action_embed_dim: 32
+  n_actions: 9
+  groupnorm_groups: 32
+  fourier_dim: 64                      # Fourier features for the noise-level embeddings
+  dropout: 0.0
+
+diffusion:                             # Karras et al. 2022 (EDM), DIAMOND Atari values
+  sigma_data: 0.5
+  p_mean: -0.4                         # ln(sigma) ~ N(p_mean, p_std) during training
+  p_std: 1.2
+  sigma_min: 0.002
+  sigma_max: 20.0
+  rho: 7
+  rollout_steps: 3                     # Euler steps for autoregressive rollouts
+  grid_steps: 10                       # Euler steps for eval grids
+
+ctx_noise:                             # GameNGen-style context noise augmentation
+  enabled: true
+  prob: 0.5                            # fraction of training samples whose context is noised
+  sigma_min: 0.002                     # log-uniform range of the context noise level
+  sigma_max: 0.5
+  infer_sigma: 0.0                     # context noise level used at inference
+
+train:
+  steps: 15000
+  batch_size: 64
+  lr: 1.0e-5                          # 10x below the base runs' 1e-4
+  weight_decay: 0.01
+  warmup_steps: 100                    # linear warmup, then constant
+  grad_clip: 1.0
+  ema_decay: 0.999
+  bf16: true
+  log_every: 50
+  eval_every: 2500
+  eval_batches: 20                     # fixed val batches (fixed sigma and noise) for val denoising loss
+  device: auto
+  checkpoint_dir: checkpoints/m1-3M-r148-ft-fright   # own folder; the parent checkpoint is only read
+  wandb_project: pacworld
+
+eval:
+  out_dir: outputs/m1-3M-r148-ft-fright
+  grid_samples: 8
+  rollout_seconds: 5
+  rollout_start: 100
+  fps: 15
+  upscale: 4
+
+finetune:
+  init_from: checkpoints/m1-2M-ctx-r148/model1_latest.pt   # read only: live + EMA weights; optimizer and step start fresh
+
+events:                                # rare-event enrichment of the training batches
+  index: data/cache/events_3m.npz      # built from the recorded RAM by tools/build_event_index.py
+  frightened_ram: 116                  # nonzero while ghosts are frightened
+  kinds: [fright_end]                  # frightened-phase ends only (pen-release windows are ~25% of all windows anyway)
+  radius: 8                            # windows whose target is within +-8 steps of an event
+  frac: 0.25                           # share of every batch drawn from event windows; the rest is uniform

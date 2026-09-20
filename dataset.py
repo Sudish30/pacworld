@@ -286,7 +286,9 @@ def to_uint8(x):
 
 
 def get_datasets(cfg):
-    cache = load_cache(cfg)
+    # data.cache_mmap: map a .npy cache instead of reading it into RAM (for caches larger than the machine's memory;
+    # warm the page cache first, e.g. `cat <cache> > /dev/null`, or the first pass over the data is slow)
+    cache = load_cache(cfg, mmap=cfg["data"].get("cache_mmap", False))
     train_idx, val_idx = load_split(cfg, cache["ep_seed"])
     offsets = context_offsets(cfg["data"])
     return WindowDataset(cache, train_idx, offsets), WindowDataset(cache, val_idx, offsets), cache, (train_idx, val_idx)
