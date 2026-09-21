@@ -8,7 +8,11 @@
                   info/stats. Client -> server: {"type":"keys","keys":{"up":..}}
                   or {"type":"reset","ctx_sigma":0.0}.
   POST /reload    re-read the EMA checkpoint (pick up newer weights during training)
-  GET  /status    loaded checkpoint step, clients, rolling fps / latency
+  GET  /status    loaded checkpoint step and lineage, clients, rolling fps / latency, watchdog resets
+
+Watchdog: the model can lose Pac-Man for good (an empty maze after a death, an endless frightened phase), which
+leaves nothing to control. The real game never hides him for a single frame, so when the detector finds no
+Pac-Man on `missing_checks` consecutive checks the server starts a fresh session and tells the page why.
 
 Run:  python serve/server.py --seed 0 [--config configs/serve.yaml] [--port 8000]
 """
@@ -17,6 +21,7 @@ import asyncio
 import io
 import json
 import random
+import re
 import statistics
 import sys
 import threading
@@ -34,11 +39,38 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "eval"))
 from common import load_config  # noqa: E402
 from dataset import History, context_offsets, load_cache, load_split, to_uint8  # noqa: E402
 from model1 import build_model, euler_sample  # noqa: E402
+import detectors as D  # noqa: E402
 
 ACTION_NAMES = ["NOOP", "UP", "RIGHT", "LEFT", "DOWN", "UPRIGHT", "UPLEFT", "DOWNRIGHT", "DOWNLEFT"]
+
+
+def _short(run_dir, parent_dir=None):
+    """m1-2M-ctx6s16-ft-uniform -> ft-uniform (relative to its parent m1-2M-ctx6s16) or ctx6s16 (no parent)."""
+    name = Path(run_dir).name
+    if parent_dir and name.startswith(Path(parent_dir).name + "-"):
+        return name[len(Path(parent_dir).name) + 1:]
+    return re.sub(r"^m1-\d+M-", "", name) or name
+
+
+def _k(steps):
+    return f"{steps // 1000}k" if steps % 1000 == 0 else str(steps)
+
+
+def lineage(path, ck=None, depth=0):
+    """'ft-uniform, 15k steps from ctx6s16@100k' - follows finetune.init_from through the parent checkpoints."""
+    path = Path(path)
+    ck = ck or torch.load(path, map_location="cpu", mmap=True)
+    init = (ck["cfg"].get("finetune") or {}).get("init_from")
+    if not init or depth > 4 or not (ROOT / init).exists():
+        return f"{_short(path.parent if path.parent.name != 'checkpoints' else path.stem)}, {_k(ck['step'])} steps from scratch"
+    parent = torch.load(ROOT / init, map_location="cpu", mmap=True)
+    here = f"{_short(path.parent, Path(init).parent)}, {_k(ck['step'])} steps from {_short(Path(init).parent)}@{_k(parent['step'])}"
+    grand = (parent["cfg"].get("finetune") or {}).get("init_from")
+    return here + (f"; {lineage(ROOT / init, parent, depth + 1)}" if grand else "")
 
 
 def keys_to_action(keys):
@@ -72,6 +104,7 @@ class Session:
         self.episode = episode
         self.ctx_sigma = ctx_sigma
         self.frames = 0
+        self.missing = 0            # consecutive watchdog checks without Pac-Man
 
 
 class World:
@@ -87,6 +120,9 @@ class World:
         self.dcfg = self.model_cfg["diffusion"]
         self.cache = load_cache(self.model_cfg, mmap=True)   # only a few val frames are read per session
         _, self.val_idx = load_split(self.model_cfg, self.cache["ep_seed"])
+        self.wd = cfg.get("watchdog") or {}
+        self.ref = D.load_reference(load_config(ROOT / self.wd["detector_config"])) if self.wd.get("enabled") else None
+        self.auto_resets = 0
         self.latencies = deque(maxlen=300)
         self.frame_times = deque(maxlen=300)
         self.clients = 0
@@ -102,7 +138,8 @@ class World:
         with self.lock:
             self.model, self.model_cfg, self.step = model, ck["cfg"], ck["step"]
             self.offsets = context_offsets(ck["cfg"]["data"])   # a reloaded checkpoint may use another context layout
-        print(f"loaded {path} (training step {self.step})")
+            self.lineage = lineage(path, ck)
+        print(f"loaded {path} (training step {self.step}; {self.lineage})")
         return self.step
 
     def new_session(self, ctx_sigma=None):
@@ -128,7 +165,14 @@ class World:
         pred = pred.float()
         session.hist.push(pred)
         session.frames += 1
-        return to_uint8(pred[0]).permute(1, 2, 0).cpu().numpy()
+        frame = to_uint8(pred[0]).permute(1, 2, 0).cpu().numpy()
+        if self.ref is not None and session.frames % self.wd["check_every"] == 0:
+            session.missing = 0 if self.ref.sprites(frame)["pac"] is not None else session.missing + 1
+        return frame
+
+    def lost(self, session):
+        """True when Pac-Man has been missing for watchdog.missing_checks consecutive checks."""
+        return self.ref is not None and session.missing >= self.wd["missing_checks"]
 
     def stats(self):
         lat = sorted(self.latencies)
@@ -136,7 +180,7 @@ class World:
         fps = (len(ft) - 1) / (ft[-1] - ft[0]) if len(ft) > 1 and ft[-1] > ft[0] else 0.0
         p = lambda q: (lat[min(len(lat) - 1, int(q * len(lat)))] * 1000) if lat else 0.0
         return {"fps": round(fps, 1), "latency_p50_ms": round(p(0.5), 1), "latency_p95_ms": round(p(0.95), 1),
-                "step": self.step, "clients": self.clients}
+                "step": self.step, "clients": self.clients, "auto_resets": self.auto_resets}
 
 
 def encode_png(frame):
@@ -160,7 +204,8 @@ async def index():
 async def status():
     return JSONResponse({**world.stats(), "checkpoint": world.cfg["checkpoint"], "fps_target": world.cfg["fps"],
                          "sampler_steps": world.cfg["sampler_steps"], "context_offsets": world.offsets,
-                         "ctx_sigma": world.cfg["ctx_sigma"]})
+                         "ctx_sigma": world.cfg["ctx_sigma"], "lineage": world.lineage,
+                         "watchdog": world.wd if world.wd.get("enabled") else None})
 
 
 @app.post("/reload")
@@ -177,10 +222,10 @@ async def ws(websocket: WebSocket):
     keys = {}
     period = 1.0 / world.cfg["fps"]
 
-    async def send_info():
+    async def send_info(reason=None):
         await websocket.send_text(json.dumps({"type": "info", "seed": session.seed, "episode": session.episode,
-                                              "step": world.step, "ctx_sigma": session.ctx_sigma,
-                                              "upscale": world.cfg["upscale"], "fps_target": world.cfg["fps"]}))
+                                              "step": world.step, "ctx_sigma": session.ctx_sigma, "lineage": world.lineage,
+                                              "upscale": world.cfg["upscale"], "fps_target": world.cfg["fps"], "reason": reason}))
 
     async def receiver():
         nonlocal session
@@ -203,6 +248,12 @@ async def ws(websocket: WebSocket):
             action = keys_to_action(keys)
             frame = await asyncio.to_thread(world.predict, session, action)
             await websocket.send_bytes(encode_png(frame))
+            if world.lost(session):
+                steps = world.wd["missing_checks"] * world.wd["check_every"]
+                world.auto_resets += 1
+                print(f"[watchdog] Pac-Man missing for {steps} steps at session frame {session.frames}: new session")
+                session = world.new_session(session.ctx_sigma)
+                await send_info(f"Pac-Man was lost for {steps / world.cfg['fps']:.0f} s - new board")
             now = time.perf_counter()
             world.latencies.append(now - t0)
             world.frame_times.append(now)

@@ -55,6 +55,8 @@ function connect() {
         $('step').textContent = m.step; $('seed').textContent = m.seed; $('sigma').value = m.ctx_sigma;
         const s = m.upscale * 64; canvas.width = s; canvas.height = s; ctx.imageSmoothingEnabled = false;
         frameCount = 0;
+        if (m.lineage) document.title = 'pacworld - ' + m.lineage;
+        if (m.reason) { $('status').textContent = m.reason; setTimeout(() => { $('status').textContent = 'connected'; }, 4000); }
       } else if (m.type === 'stats') {
         $('lat').textContent = m.latency_p50_ms + ' / ' + m.latency_p95_ms;
         $('action').textContent = m.action; $('step').textContent = m.step; $('frames').textContent = m.frames;

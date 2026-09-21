@@ -9,3 +9,11 @@ start_step: 100          # where in the val episode the context is taken (past t
 upscale: 6               # canvas scale (nearest-neighbour), used by the page
 bf16: true
 stats_log_every_s: 5
+
+# Watchdog: the model can lose Pac-Man for good (empty maze after a death, endless frightened phase). The real game
+# never hides him for a single frame (checked on 4,864 recorded frames), so a long absence means the world is stuck.
+watchdog:
+  enabled: true
+  detector_config: configs/eval.yaml   # detector thresholds and the reference maze
+  check_every: 3           # run the Pac-Man detector on every 3rd frame (6.6 ms per check)
+  missing_checks: 15       # consecutive checks without Pac-Man before a new session starts (15 x 3 = 45 steps = 3 s)
