@@ -1,8 +1,10 @@
-"""Colour/structure detectors for 64x64 Ms. Pac-Man frames.
+"""Colour/structure detectors for downsampled Ms. Pac-Man frames (64x64 or 128x128).
 
-Everything is derived from the fact that the 64x64 frames are area (BOX)
-downsamples of the 172x160 maze crop, so every 64x64 pixel is a linear mix of
-the native palette colours.
+Everything is derived from how the dataset cache builds a frame from the 172x160
+maze crop. With area (BOX) downsampling every pixel is a linear mix of the native
+palette colours; with NEAREST every pixel IS a native palette colour, so the same
+unmixing still applies with coverage 0 or 1. data.resample picks which, and the
+reference maze is built the same way, so detector and frames always agree.
 
   MazeReference   static maze at 64x64 built once from a native frame: wall
                   reference mask, per-pellet footprints, pellet-free background,
@@ -66,10 +68,21 @@ def _area_matrix(n_in, n_out):
     return M / scale
 
 
+def _nearest_matrix(n_in, n_out):
+    """(n_out, n_in) 0/1 selection matrix, read out of PIL itself so it matches the cache exactly."""
+    from PIL import Image
+    probe = np.repeat(np.arange(n_in, dtype=np.uint8)[:, None], 2, axis=1)
+    pick = np.asarray(Image.fromarray(probe, mode="L").resize((2, n_out), Image.NEAREST))[:, 0].astype(int)
+    M = np.zeros((n_out, n_in))
+    M[np.arange(n_out), pick] = 1.0
+    return M
+
+
 class Downsampler:
-    def __init__(self, size=64):
-        self.Mh = _area_matrix(NATIVE_H, size)
-        self.Mw = _area_matrix(NATIVE_W, size)
+    def __init__(self, size=64, mode="box"):
+        f = _area_matrix if mode == "box" else _nearest_matrix
+        self.Mh = f(NATIVE_H, size)
+        self.Mw = f(NATIVE_W, size)
 
     def __call__(self, img):
         """img (H, W) or (H, W, C) float -> (size, size[, C])."""
@@ -110,11 +123,12 @@ def _exact(frame, col, allow_bg_blue=False):
 
 # ----------------------------------------------------------------------------- maze reference
 class MazeReference:
-    def __init__(self, native_frame, cfg, size=64):
+    def __init__(self, native_frame, cfg, size=64, mode="box"):
         d = cfg["detector"]
         self.cfg = d
         self.size = size
-        self.down = Downsampler(size)
+        self.mode = mode
+        self.down = Downsampler(size, mode)
         bg, wall = np.array(BG, float), np.array(WALL, float)
         self.bg_col, self.wall_col = bg, wall
         self.pink_axis = (wall - bg) / ((wall - bg) @ (wall - bg))
@@ -132,7 +146,7 @@ class MazeReference:
         maze[wall_native] = wall
         maze[_exact(native_frame, BLACK)] = 0.0
         # downsample the reference exactly as the dataset cache does (PIL BOX on uint8)
-        self.bg64 = downsample_frames(maze.astype(np.uint8)[None], size)[0].astype(float)     # (64, 64, 3)
+        self.bg64 = downsample_frames(maze.astype(np.uint8)[None], size, mode)[0].astype(float)   # (size, size, 3)
         self.wall_ref = self.pinkness(self.bg64) > d["wall_pinkness"]   # same test the frame mask uses
 
         # per-pellet footprints and additive background contributions
@@ -272,31 +286,40 @@ def _frightened_blobs(self, frame64, presence=None):
 MazeReference.frightened_blobs = _frightened_blobs
 
 
-def native_sprite_centroid(native_frame, col, min_px=10):
+def native_sprite_centroid(native_frame, col, min_px=10, size=64):
     m = _exact(native_frame, col, allow_bg_blue=True)
     if m.sum() < min_px:
         return None
     r, c = np.nonzero(m)
-    return np.array([r.mean() * 64 / NATIVE_H, c.mean() * 64 / NATIVE_W])
+    return np.array([r.mean() * size / NATIVE_H, c.mean() * size / NATIVE_W])
 
 
-def downsample_frames(native_frames, size=64):
-    """Same resize as dataset.build_cache (PIL BOX) -> uint8 (N, size, size, 3)."""
-    from PIL import Image
-    return np.stack([np.asarray(Image.fromarray(x).resize((size, size), Image.BOX)) for x in native_frames])
+def downsample_frames(native_frames, size=64, mode="box"):
+    """Exactly the resize dataset.build_cache uses -> uint8 (N, size, size, 3)."""
+    from dataset import resize_frames
+    return resize_frames(native_frames, size, mode)
+
+
+def frame_geometry(cfg):
+    """(size, resample mode) the frames of this config are built with."""
+    d = cfg["data"]
+    return d["size"], d.get("resample", "box")
 
 
 def load_reference(cfg):
     """Build the maze reference from the first frame of the first recorded episode."""
     first = episode_files(cfg["data"], ROOT)[0]
-    return MazeReference(np.load(first)["frames"][0], cfg, cfg["data"]["size"])
+    size, mode = frame_geometry(cfg)
+    return MazeReference(np.load(first)["frames"][0], cfg, size, mode)
 
 
 # ----------------------------------------------------------------------------- validation
 def validate(cfg, n_episodes=3, stride=6, seed=0):
     from common import load_config  # noqa
     ref = load_reference(cfg)
-    print(f"maze reference: {ref.n_dots} dots + {ref.n_power} power pellets, wall cells {ref.wall_ref.sum()}")
+    scale = ref.size / 64        # position errors are in cache pixels; report them per 64px-equivalent too
+    print(f"maze reference: {ref.size}x{ref.size} '{ref.mode}', {ref.n_dots} dots + {ref.n_power} power pellets, "
+          f"wall cells {ref.wall_ref.sum()}")
     files = episode_files(cfg["data"], ROOT)
     rng = np.random.default_rng(seed)
     files = [files[i] for i in rng.choice(len(files), n_episodes, replace=False)]
@@ -304,7 +327,7 @@ def validate(cfg, n_episodes=3, stride=6, seed=0):
     pellet_agree, pellet_iou, wall_iou = [], [], []
     for f in files:
         ep = np.load(f)
-        native, small = ep["frames"], downsample_frames(ep["frames"], ref.size)
+        native, small = ep["frames"], downsample_frames(ep["frames"], ref.size, ref.mode)
         pellet_native_masks = None
         for t in range(0, len(native), stride):
             x, s = native[t], small[t]
@@ -320,7 +343,7 @@ def validate(cfg, n_episodes=3, stride=6, seed=0):
             wall_iou.append(ref.wall_iou(s))
             det = ref.sprites(s, presence)
             for n in stats:
-                truth = native_sprite_centroid(x, SPRITES[n])
+                truth = native_sprite_centroid(x, SPRITES[n], size=ref.size)
                 if truth is None:
                     stats[n]["absent"] += 1
                     stats[n]["false"] += det[n] is not None
@@ -337,9 +360,10 @@ def validate(cfg, n_episodes=3, stride=6, seed=0):
         e = np.array(s["err"]) if s["err"] else np.array([np.nan])
         rate = s["hit"] / max(s["tot"], 1)
         print(f"{n:7s} detected {s['hit']}/{s['tot']} ({100 * rate:.1f}%)  false pos {s['false']}/{s['absent']}  "
-              f"pos err px: mean {np.nanmean(e):.2f}  p90 {np.nanpercentile(e, 90):.2f}  max {np.nanmax(e):.1f}  (>2px: {100 * np.mean(e > 2):.1f}%)")
-        ok &= rate >= 0.95 and np.nanmean(e) < 1.0
-    print("VALIDATION", "PASS" if ok else "FAIL", "(target: >=95% detection, <1 px mean error per sprite)")
+              f"pos err: mean {np.nanmean(e):.2f} px = {np.nanmean(e) / scale:.2f} at 64px-equivalent,  p90 {np.nanpercentile(e, 90):.2f}  "
+              f"max {np.nanmax(e):.1f}  (>{2 * scale:.0f}px: {100 * np.mean(e > 2 * scale):.1f}%)")
+        ok &= rate >= 0.95 and np.nanmean(e) < scale
+    print("VALIDATION", "PASS" if ok else "FAIL", "(target: >=95% detection, <1 px mean error per sprite at 64px-equivalent)")
 
 
 if __name__ == "__main__":

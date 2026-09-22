@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from PIL import Image, ImageDraw, ImageFont
 
 from common import load_config
-from dataset import History, context_offsets, get_datasets, to_float, to_uint8
+from dataset import FrameCodec, History, context_offsets, get_datasets, to_float, to_uint8
 from model1 import build_model, count_params, euler_sample, sample_sigmas
 from train_model0 import pick_device, psnr_from_mse, upscale
 
@@ -110,13 +110,14 @@ def render_rollout(model, cache, episode_idx, cfg, device, out_path, seed):
     steps = int(e["rollout_seconds"] * e["fps"])
     start_abs, end_abs = int(cache["ep_start"][episode_idx]), int(cache["ep_start"][episode_idx + 1])
     t0 = min(start_abs + e["rollout_start"], end_abs - steps - 1)
-    frames = torch.from_numpy(cache["frames"][t0:t0 + steps])            # the real frames being predicted
+    codec = FrameCodec(cache.get("palette"))
+    frames = torch.from_numpy(codec.decode_np(cache["frames"][t0:t0 + steps]))   # the real frames being predicted, RGB
     actions = torch.from_numpy(cache["actions"][t0 - 1:t0 + steps - 1])  # actions[t] produced frames[t]
     names = ["NOOP", "UP", "RIGHT", "LEFT", "DOWN", "UPRIGHT", "UPLEFT", "DOWNRIGHT", "DOWNLEFT"]
 
     g = torch.Generator().manual_seed(seed)
     gd = torch.Generator(device=device).manual_seed(seed)
-    episode = (cache["frames"][start_abs:end_abs], cache["actions"][start_abs:end_abs])
+    episode = (codec.decode_np(cache["frames"][start_abs:end_abs]), cache["actions"][start_abs:end_abs])
     hist = History.from_episodes([episode], t0 - start_abs, context_offsets(cfg["data"]), device)
     preds, mses = [], []
     for t in range(steps):
@@ -180,7 +181,9 @@ def main():
     use_bf16 = tr["bf16"] and device.type == "cuda"
 
     train, val, cache, (train_idx, val_idx) = get_datasets(cfg)
-    print(f"episodes {len(train_idx)} train / {len(val_idx)} val; windows {len(train)} train / {len(val)} val")
+    codec = train.codec.to(device)
+    print(f"episodes {len(train_idx)} train / {len(val_idx)} val; windows {len(train)} train / {len(val)} val"
+          + (f"; palette cache, {len(codec.palette)} colours expanded on {device}" if codec.palette is not None else ""))
     val_batches = val.fixed_batches(tr["batch_size"], tr["eval_batches"], seed=args.seed)
 
     model = build_model(cfg).to(device)
@@ -234,8 +237,12 @@ def main():
         for pg in opt.param_groups:
             pg["lr"] = lr
 
-        ctx, acts, tgt = train.sample_mixed(tr["batch_size"], gen, ecfg["frac"]) if ecfg else train.sample(tr["batch_size"], gen)
-        ctx, acts, tgt = ctx.to(device, non_blocking=True), acts.to(device), tgt.to(device, non_blocking=True)
+        ctx_u8, acts, tgt_u8 = train.sample_mixed(tr["batch_size"], gen, ecfg["frac"]) if ecfg else train.sample(tr["batch_size"], gen)
+        # the cached bytes cross the bus as they are stored (one byte per pixel for a palette cache) and the
+        # RGB expansion happens on the GPU
+        ctx = codec.decode(ctx_u8.to(device, non_blocking=True))
+        tgt = codec.decode(tgt_u8.to(device, non_blocking=True)[:, None])
+        acts = acts.to(device)
         ctx, ctx_sigma = noise_context(ctx, ccfg, gen, device, train=True)
         sigma = sample_sigmas(d["p_mean"], d["p_std"], tgt.shape[0], "cpu", gen).to(device)
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=use_bf16):

@@ -81,7 +81,7 @@ def step_motion(track, max_jump=20.0):
 
 def calibrate(cfg, eps, pool):
     """Run both detectors over the real frames of the eval episodes."""
-    real = [D.downsample_frames(e["native"]) if "native" in e else e["frames"] for e in eps]
+    real = [D.downsample_frames(e["native"], *D.frame_geometry(cfg)) if "native" in e else e["frames"] for e in eps]
     mad = [np.abs(np.diff(f.astype(np.int16), axis=0)).mean(axis=(1, 2, 3)) for f in real]
     tracks = pool.map(_pac_track, real)
     motion = [step_motion(t) for t in tracks]

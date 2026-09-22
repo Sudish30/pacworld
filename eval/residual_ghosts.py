@@ -34,17 +34,18 @@ from common import load_config  # noqa: E402
 from dataset import episode_path  # noqa: E402
 import detectors as D  # noqa: E402
 from eval_rollouts import write_csv  # noqa: E402
-from pen_timer_analysis import OCC_PIXELS, OCC_RESID, PEN_BOX, SPAWN_PX, in_pen  # noqa: E402
+from pen_timer_analysis import geom, in_pen  # noqa: E402
 
 
-def own_respawns(pac, H):
+def own_respawns(pac, H, size=64):
     """Steps at which the model's Pac-Man jumps to the spawn point (same rule as pen_timer_analysis.py)."""
+    GM = geom(size)
     ev = []
     for k in range(1, H):
         a, b = pac[k - 1], pac[k]
         if np.isnan(a).any() or np.isnan(b).any():
             continue
-        if np.hypot(*(b - a)) > 6 and np.hypot(b[0] - SPAWN_PX[0], b[1] - SPAWN_PX[1]) < 2.5:
+        if np.hypot(*(b - a)) > GM["jump"] and np.hypot(b[0] - GM["spawn"][0], b[1] - GM["spawn"][1]) < GM["spawn_r"]:
             ev.append(k)
     return ev
 
@@ -88,7 +89,8 @@ def main():
         for gi, g in enumerate(G):
             pen[r, :, gi] = in_pen(ram, g)[start:start + H]
     been = np.maximum.accumulate(pen, axis=1)
-    m_ev = [own_respawns(pac[r], H) for r in range(R)]
+    SIZE = cfg["data"]["size"]
+    m_ev = [own_respawns(pac[r], H, SIZE) for r in range(R)]
 
     # ---- pixel pen zone, calibrated on ground truth: where detections sit while RAM says "in pen"
     inside = gt_pos[gt_det & pen]
@@ -154,8 +156,9 @@ def main():
     # ---- class-agnostic pen occupancy of the generated frames
     ref = D.load_reference(cfg)
     preds = np.load(ROOT / cfg["out_dir"] / "model1" / "preds_all.npy", mmap_mode="r")
-    bgbox = ref.bg64[PEN_BOX]
-    m_occ = np.array([[(np.linalg.norm(np.asarray(preds[r, k])[PEN_BOX].astype(float) - bgbox, axis=-1) > OCC_RESID).sum() >= OCC_PIXELS
+    GM = geom(ref.size)
+    bgbox = ref.bg64[GM["pen_box"]]
+    m_occ = np.array([[(np.linalg.norm(np.asarray(preds[r, k])[GM["pen_box"]].astype(float) - bgbox, axis=-1) > GM["occ_resid"]).sum() >= GM["occ_pixels"]
                        for k in range(H)] for r in range(R)])
     after_own = np.zeros((R, H), bool)          # within the reset period after one of the model's own respawns
     for r in range(R):

@@ -19,6 +19,12 @@ data.folder may be one folder or a list. A cache path ending in .npy is written 
 stream (frames in the .npy, everything else in <stem>_meta.npz) so that building it never
 holds more than one chunk of episodes in memory; a .npz path keeps the original format.
 
+data.palette: true stores one byte per pixel (an index into the game's fixed colour palette,
+kept in the meta file) instead of three. It is exactly lossless only when every frame is built
+from palette colours, which needs data.resample: nearest; the builder proves this by mapping
+every pixel of every frame and failing if a single one is not in the palette. FrameCodec turns
+those bytes back into RGB wherever the tensor lives, so the expansion runs on the GPU.
+
 Run directly to build the cache and print split statistics:
   python dataset.py --seed 0
 """
@@ -32,6 +38,42 @@ import torch
 from PIL import Image
 
 from common import load_config
+
+
+RESAMPLE = {"box": Image.BOX, "nearest": Image.NEAREST, "bilinear": Image.BILINEAR}
+
+
+def resize_frames(native, size, mode="box"):
+    """Native uint8 frames -> (N, size, size, 3). 'nearest' keeps the game's exact palette colours."""
+    f = RESAMPLE[mode]
+    return np.stack([np.asarray(Image.fromarray(x).resize((size, size), f)) for x in native])
+
+
+def _rgb_key(a):
+    a = a.astype(np.uint32)
+    return (a[..., 0] << 16) | (a[..., 1] << 8) | a[..., 2]
+
+
+class FrameCodec:
+    """Cached frame bytes -> float RGB in [-1, 1]. With a palette the expansion happens on the tensor's device."""
+
+    def __init__(self, palette=None):
+        self.palette = None if palette is None else torch.as_tensor(np.asarray(palette), dtype=torch.uint8)
+
+    def to(self, device):
+        if self.palette is not None:
+            self.palette = self.palette.to(device)
+        return self
+
+    def decode(self, u8):
+        """(B, K, H, W) indices or (B, K, H, W, 3) RGB -> (B, K*3, H, W) float in [-1, 1]."""
+        rgb = self.palette[u8.long()] if self.palette is not None else u8
+        B, K, H, W, _ = rgb.shape
+        return to_float(rgb.permute(0, 1, 4, 2, 3).reshape(B, K * 3, H, W))
+
+    def decode_np(self, idx):
+        """Cached bytes -> uint8 RGB numpy (for the rollout history, which works in RGB)."""
+        return np.asarray(idx) if self.palette is None else self.palette.cpu().numpy()[np.asarray(idx)]
 
 
 def episode_files(d, root=Path(".")):
@@ -62,14 +104,42 @@ def _episode_len(path):
         return len(ep["actions"]) + 1
 
 
+_LUT = None
+
+
+def _set_lut(lut):
+    global _LUT
+    _LUT = lut
+
+
 def _load_small(job):
-    path, size = job
+    path, size, mode = job
     with np.load(path) as ep:
-        small = np.stack([np.asarray(Image.fromarray(x).resize((size, size), Image.BOX)) for x in ep["frames"]])
+        small = resize_frames(ep["frames"], size, mode)
+        unknown = 0
+        if _LUT is not None:                       # palette cache: one byte per pixel, 255 marks "not in the palette"
+            small = _LUT[_rgb_key(small)]
+            unknown = int((small == 255).sum())
         # align actions with frames: actions[j] follows frames[j]; the final frame has no action (-1)
         actions = np.concatenate([ep["actions"], [-1]]).astype(np.int64)
         rewards = np.concatenate([ep["rewards"], [0.0]]).astype(np.float32)
-        return small, actions, rewards, int(ep["seed"])
+        return small, actions, rewards, int(ep["seed"]), unknown
+
+
+def scan_palette(files, size, mode, workers, stride=17):
+    """The frames' colour palette, from a stride sample. Index 255 stays free as the 'unknown colour' marker."""
+    with Pool(workers) as pool:
+        cols = pool.starmap(_episode_colours, [(f, size, mode, stride) for f in files], chunksize=8)
+    pal = np.unique(np.concatenate(cols), axis=0)
+    if len(pal) > 255:
+        raise SystemExit(f"{len(pal)} distinct colours at size {size} with resample '{mode}': too many for one byte "
+                         f"(use data.resample: nearest, which keeps the game's fixed palette)")
+    return pal
+
+
+def _episode_colours(path, size, mode, stride):
+    with np.load(path) as ep:
+        return np.unique(resize_frames(ep["frames"][::stride], size, mode).reshape(-1, 3), axis=0)
 
 
 def meta_path(cache_path):
@@ -82,20 +152,32 @@ def build_cache(cfg, workers, chunk):
     if not files:
         raise SystemExit(f"no episodes in {d['folder']}")
     size, out = d["size"], Path(d["cache"])
+    mode = d.get("resample", "box")
     out.parent.mkdir(parents=True, exist_ok=True)
     stream = out.suffix == ".npy"
-    frames, actions, rewards, seeds = [], [], [], []
-    with Pool(workers) as pool:
+    palette = None
+    if d.get("palette"):
+        if mode != "nearest":
+            print(f"warning: data.palette with resample '{mode}' (only 'nearest' is guaranteed to stay in the palette)")
+        palette = scan_palette(files, size, mode, workers)
+        lut = np.full(1 << 24, 255, np.uint8)
+        lut[_rgb_key(palette)] = np.arange(len(palette), dtype=np.uint8)
+        print(f"  palette: {len(palette)} colours at {size}x{size} ('{mode}'), 1 byte per pixel "
+              f"({100 * (1 - 1 / 3):.0f}% smaller than RGB)")
+    frames, actions, rewards, seeds, unknown_total = [], [], [], [], 0
+    init = (_set_lut, (lut,)) if palette is not None else (None, ())
+    with Pool(workers, initializer=init[0], initargs=init[1]) as pool:
         lengths = pool.map(_episode_len, files, chunksize=16)
         starts = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int64)
+        shape = (int(starts[-1]), size, size) + (() if palette is not None else (3,))
         fp = None
         if stream:   # header first, then each episode's bytes in order: sequential writes, one chunk in memory
             fp = open(out, "wb")
-            np.lib.format.write_array_header_2_0(fp, {"descr": "|u1", "fortran_order": False,
-                                                      "shape": (int(starts[-1]), size, size, 3)})
+            np.lib.format.write_array_header_2_0(fp, {"descr": "|u1", "fortran_order": False, "shape": shape})
         for c0 in range(0, len(files), chunk):
-            for k, (small, a, r, seed) in enumerate(pool.map(_load_small, [(f, size) for f in files[c0:c0 + chunk]]), c0):
+            for k, (small, a, r, seed, unknown) in enumerate(pool.map(_load_small, [(f, size, mode) for f in files[c0:c0 + chunk]]), c0):
                 assert len(small) == lengths[k], f"{files[k]} changed while caching"
+                unknown_total += unknown
                 if stream:
                     fp.write(np.ascontiguousarray(small).tobytes())
                 else:
@@ -106,13 +188,19 @@ def build_cache(cfg, workers, chunk):
             print(f"  cached {min(c0 + chunk, len(files))}/{len(files)} episodes")
         if stream:
             fp.close()
+    if palette is not None and unknown_total:
+        raise SystemExit(f"palette cache is NOT lossless: {unknown_total} pixels are not in the {len(palette)}-colour palette")
     meta = dict(actions=np.concatenate(actions), rewards=np.concatenate(rewards),
                 ep_seed=np.asarray(seeds, dtype=np.int64), ep_start=starts)
+    if palette is not None:
+        meta["palette"] = palette
     if stream:
         np.savez(meta_path(out), **meta)
     else:
         np.savez(out, frames=np.concatenate(frames), **meta)
-    print(f"wrote {out}: {starts[-1]} frames from {len(files)} episodes at {size}x{size}")
+    extra = (f"; palette {len(palette)} colours, every one of the {starts[-1] * size * size:,} pixels mapped exactly"
+             if palette is not None else "")
+    print(f"wrote {out}: {starts[-1]} frames from {len(files)} episodes at {size}x{size} ('{mode}'){extra}")
 
 
 def load_cache(cfg, mmap=False):
@@ -126,6 +214,10 @@ def load_cache(cfg, mmap=False):
         return c
     c = np.load(path)
     return {k: c[k] for k in c.files}
+
+
+def codec_of(cache):
+    return FrameCodec(cache.get("palette"))
 
 
 def load_split(cfg, ep_seeds):
@@ -177,10 +269,11 @@ def gather_context(frames, actions, target_idx, first_idx, offsets):
 class WindowDataset:
     """Samples (context, actions, target) windows from a fixed set of episodes."""
 
-    def __init__(self, cache, episode_idx, offsets):
+    def __init__(self, cache, episode_idx, offsets, codec=None):
         self.offsets = torch.as_tensor(offsets, dtype=torch.long)
         self.K = len(offsets)
-        self.frames = torch.from_numpy(cache["frames"])          # (N, H, W, 3) uint8
+        self.codec = codec or codec_of(cache)
+        self.frames = torch.from_numpy(cache["frames"])          # (N, H, W, 3) RGB or (N, H, W) palette indices
         self.actions = torch.from_numpy(cache["actions"])        # (N,) int64
         self.ep_start = torch.from_numpy(cache["ep_start"])      # (E + 1,) int64
         targets = []
@@ -195,17 +288,20 @@ class WindowDataset:
     def first_idx(self, target_idx):
         return self.ep_start[torch.searchsorted(self.ep_start, target_idx, right=True) - 1]
 
-    def get(self, target_idx):
-        """target_idx: LongTensor (B,) of absolute frame indices. Returns CPU tensors."""
+    def get_raw(self, target_idx):
+        """target_idx: LongTensor (B,). Cached bytes as they are stored: ctx (B, K, H, W[, 3]), tgt (B, H, W[, 3])."""
         ctx, acts, _ = gather_context(self.frames, self.actions, target_idx, self.first_idx(target_idx), self.offsets)
-        B, K, H, W, C = ctx.shape                                    # (B, K, H, W, 3)
-        ctx = ctx.permute(0, 1, 4, 2, 3).reshape(B, K * C, H, W)
-        tgt = self.frames[target_idx].permute(0, 3, 1, 2)            # (B, 3, H, W)
-        return to_float(ctx), acts, to_float(tgt)
+        return ctx, acts, self.frames[target_idx]
+
+    def get(self, target_idx):
+        """Decoded on the CPU: ctx (B, K*3, H, W) and target (B, 3, H, W) float in [-1, 1]."""
+        ctx, acts, tgt = self.get_raw(target_idx)
+        return self.codec.decode(ctx), acts, self.codec.decode(tgt[:, None])
 
     def sample(self, batch_size, generator):
+        """Raw bytes, so that a palette cache is expanded on the GPU instead of here (see FrameCodec)."""
         pick = torch.randint(len(self.targets), (batch_size,), generator=generator)
-        return self.get(self.targets[pick])
+        return self.get_raw(self.targets[pick])
 
     def set_event_targets(self, index, kinds, radius):
         """Targets within `radius` steps of an event (one pool per kind), restricted to this dataset's own targets
@@ -229,7 +325,7 @@ class WindowDataset:
         per = [n_ev // len(self.event_pools) + (1 if i < n_ev % len(self.event_pools) else 0) for i in range(len(self.event_pools))]
         picks = [pool[torch.randint(len(pool), (n,), generator=generator)] for pool, n in zip(self.event_pools, per)]
         picks.append(self.targets[torch.randint(len(self.targets), (batch_size - n_ev,), generator=generator)])
-        return self.get(torch.cat(picks))
+        return self.get_raw(torch.cat(picks))
 
     def fixed_batches(self, batch_size, n_batches, seed):
         g = torch.Generator().manual_seed(seed)
@@ -290,8 +386,9 @@ def get_datasets(cfg):
     # warm the page cache first, e.g. `cat <cache> > /dev/null`, or the first pass over the data is slow)
     cache = load_cache(cfg, mmap=cfg["data"].get("cache_mmap", False))
     train_idx, val_idx = load_split(cfg, cache["ep_seed"])
-    offsets = context_offsets(cfg["data"])
-    return WindowDataset(cache, train_idx, offsets), WindowDataset(cache, val_idx, offsets), cache, (train_idx, val_idx)
+    offsets, codec = context_offsets(cfg["data"]), codec_of(cache)
+    return (WindowDataset(cache, train_idx, offsets, codec), WindowDataset(cache, val_idx, offsets, codec),
+            cache, (train_idx, val_idx))
 
 
 def check_windows(cfg, train, val, cache, n_episodes, seed):
@@ -345,9 +442,14 @@ if __name__ == "__main__":
     print(f"episodes: {len(ti)} train / {len(vi)} val")
     print(f"windows:  {len(train)} train / {len(val)} val")
     g = torch.Generator().manual_seed(args.seed)
-    ctx, acts, tgt = train.sample(4, g)
-    print(f"sample: ctx {tuple(ctx.shape)} {ctx.dtype} in [{ctx.min():.1f},{ctx.max():.1f}], "
+    ctx_u8, acts, tgt_u8 = train.sample(4, g)
+    ctx, tgt = train.codec.decode(ctx_u8), train.codec.decode(tgt_u8[:, None])
+    print(f"sample: raw ctx {tuple(ctx_u8.shape)} {ctx_u8.dtype} -> decoded {tuple(ctx.shape)} in [{ctx.min():.1f},{ctx.max():.1f}], "
           f"acts {tuple(acts.shape)} {acts.tolist()[0]}, target {tuple(tgt.shape)}")
+    if train.codec.palette is not None:
+        pal = train.codec.palette
+        print(f"palette: {len(pal)} colours, e.g. {[tuple(int(v) for v in c) for c in pal[:4]]}; "
+              f"cache {cache['frames'].nbytes / 2**30:.1f} GiB as indices vs {3 * cache['frames'].nbytes / 2**30:.1f} GiB as RGB")
     assert (acts >= 0).all(), "context actions must never include the -1 end-of-episode marker"
     print(f"context offsets: {train.offsets.tolist()}")
     if args.check_windows:

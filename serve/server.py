@@ -41,7 +41,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "eval"))
 from common import load_config  # noqa: E402
-from dataset import History, context_offsets, load_cache, load_split, to_uint8  # noqa: E402
+from dataset import FrameCodec, History, context_offsets, load_cache, load_split, to_uint8  # noqa: E402
 from model1 import build_model, euler_sample  # noqa: E402
 import detectors as D  # noqa: E402
 
@@ -119,15 +119,24 @@ class World:
         self.load()
         self.dcfg = self.model_cfg["diffusion"]
         self.cache = load_cache(self.model_cfg, mmap=True)   # only a few val frames are read per session
+        self.codec = FrameCodec(self.cache.get("palette"))   # a palette cache stores indices; History works in RGB
         _, self.val_idx = load_split(self.model_cfg, self.cache["ep_seed"])
         self.wd = cfg.get("watchdog") or {}
-        self.ref = D.load_reference(load_config(ROOT / self.wd["detector_config"])) if self.wd.get("enabled") else None
+        self.ref = self._reference() if self.wd.get("enabled") else None
         self.auto_resets = 0
         self.latencies = deque(maxlen=300)
         self.frame_times = deque(maxlen=300)
         self.clients = 0
         print(f"world ready: device={self.device} bf16={self.use_bf16} val episodes={len(self.val_idx)} "
               f"checkpoint step={self.step}")
+
+    def _reference(self):
+        """Watchdog detector built for the served model's own frame size and resample filter."""
+        dcfg = load_config(ROOT / self.wd["detector_config"])
+        dcfg["data"]["size"] = self.model_cfg["data"]["size"]
+        dcfg["data"]["resample"] = self.model_cfg["data"].get("resample", "box")
+        dcfg["detector"]["min_blob_weight"] *= (dcfg["data"]["size"] / 64) ** 2
+        return D.load_reference(dcfg)
 
     def load(self):
         path = ROOT / self.cfg["checkpoint"]
@@ -148,7 +157,8 @@ class World:
         start = min(self.cfg["start_step"], b - a - 2)
         # Seed the history with the real frames before `start`, back to the episode's first frame if the
         # context reaches that far, so the first steps of a session are clamped exactly as in training.
-        hist = History.from_episodes([(self.cache["frames"][a:b], self.cache["actions"][a:b])], start, self.offsets, self.device)
+        hist = History.from_episodes([(self.codec.decode_np(self.cache["frames"][a:b]), self.cache["actions"][a:b])],
+                                     start, self.offsets, self.device)
         sigma = self.cfg["ctx_sigma"] if ctx_sigma is None else float(ctx_sigma)
         return Session(hist, int(self.cache["ep_seed"][e]), e, sigma)
 

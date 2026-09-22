@@ -33,6 +33,14 @@ SPAWN_PX = (38.5, 31.9)                      # Pac-Man respawn point at 64x64, f
 OCC_RESID, OCC_PIXELS = 40, 6                # pen counts as occupied when >= 6 pixels differ from background by > 40
 
 
+def geom(size):
+    """The 64x64 constants above, scaled to a frame of size x size (lengths by size/64, pixel counts by its square)."""
+    k = size / 64
+    return {"pen_box": (slice(round(28 * k), round(37 * k)), slice(round(26 * k), round(39 * k))),
+            "spawn": (SPAWN_PX[0] * k, SPAWN_PX[1] * k), "spawn_r": 2.5 * k, "jump": 6 * k,
+            "occ_resid": OCC_RESID, "occ_pixels": round(OCC_PIXELS * k * k), "scale": k}
+
+
 def in_pen(ram, g):
     """True while the ghost is inside the pen or travelling up the door shaft."""
     x, y = ram[:, RAM_X[g]].astype(int), ram[:, RAM_Y[g]].astype(int)
@@ -193,10 +201,11 @@ def main():
         ref = D.load_reference(cfg)
         preds = np.load(preds_path, mmap_mode="r")
         ci = names.index("autoregressive, 3 steps")
-        bgbox = ref.bg64[PEN_BOX]
+        GM = geom(ref.size)
+        bgbox = ref.bg64[GM["pen_box"]]
 
         def occ(frame):
-            return (np.linalg.norm(frame[PEN_BOX].astype(float) - bgbox, axis=-1) > OCC_RESID).sum() >= OCC_PIXELS
+            return (np.linalg.norm(frame[GM["pen_box"]].astype(float) - bgbox, axis=-1) > GM["occ_resid"]).sum() >= GM["occ_pixels"]
 
         check = np.array([ref.ghost_mass(np.asarray(preds[0, k]))["total"] for k in range(0, H, 50)])
         assert np.allclose(check, z[f"c{ci}_mass"][0, 0:H:50]), "preds_all.npy is not the same rollouts as the AR-3 condition"
@@ -206,7 +215,7 @@ def main():
         for r in range(R):
             sd = int(z["episode_seed"][r])
             if sd not in gt_frames:
-                gt_frames[sd] = D.downsample_frames(np.load(episode_path(cfg["data"], sd, ROOT))["frames"][start:start + H])
+                gt_frames[sd] = D.downsample_frames(np.load(episode_path(cfg["data"], sd, ROOT))["frames"][start:start + H], *D.frame_geometry(cfg))
             g_occ[r] = [occ(f) for f in gt_frames[sd]]
             m_occ[r] = [occ(np.asarray(preds[r, k])) for k in range(H)]
         count = z[f"c{ci}_det"].sum(-1)
@@ -255,7 +264,7 @@ def main():
                 a_, b_ = pac[r, k - 1], pac[r, k]
                 if np.isnan(a_).any() or np.isnan(b_).any():
                     continue
-                if np.hypot(*(b_ - a_)) > 6 and np.hypot(b_[0] - SPAWN_PX[0], b_[1] - SPAWN_PX[1]) < 2.5:
+                if np.hypot(*(b_ - a_)) > GM["jump"] and np.hypot(b_[0] - GM["spawn"][0], b_[1] - GM["spawn"][1]) < GM["spawn_r"]:
                     ev.append(k)
             respawns.append(ev)
         gt_losses = []

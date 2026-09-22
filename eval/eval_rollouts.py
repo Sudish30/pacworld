@@ -94,7 +94,7 @@ def load_episodes(cfg):
     eps.sort(key=lambda e: -len(e["actions"]))
     eps = eps[: cfg["rollout"]["n_episodes"]]
     for e in eps:
-        e["frames"] = D.downsample_frames(e["native"], cfg["data"]["size"])
+        e["frames"] = D.downsample_frames(e["native"], *D.frame_geometry(cfg))
         del e["native"]
     return eps
 

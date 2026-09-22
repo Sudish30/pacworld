@@ -33,23 +33,24 @@ from common import load_config  # noqa: E402
 from dataset import episode_path  # noqa: E402
 import detectors as D  # noqa: E402
 from eval_rollouts import write_csv  # noqa: E402
-from pen_timer_analysis import OCC_PIXELS, OCC_RESID, PEN_BOX, in_pen  # noqa: E402
+from pen_timer_analysis import geom, in_pen  # noqa: E402
 from residual_ghosts import own_respawns, pct  # noqa: E402
 
-_REF = None
+_REF, _GM = None, None
 MAXB = 4
 
 
 def _init(cfg):
-    global _REF
+    global _REF, _GM
     _REF = D.load_reference(cfg)
+    _GM = geom(_REF.size)
 
 
 def _frames_pass(frames):
     """Per frame: Pac-Man position, frightened blobs (row, col, weight; nan-padded), pen occupied."""
     n = len(frames)
     pac, blobs, occ = np.full((n, 2), np.nan), np.full((n, MAXB, 3), np.nan), np.zeros(n, bool)
-    bgbox = _REF.bg64[PEN_BOX]
+    bgbox = _REF.bg64[_GM["pen_box"]]
     for t, f in enumerate(frames):
         f = np.asarray(f)
         pres = _REF.pellet_presence(f)
@@ -58,7 +59,7 @@ def _frames_pass(frames):
             pac[t] = s["pac"][:2]
         for j, b in enumerate(sorted(_REF.frightened_blobs(f, pres), key=lambda b: -b[2])[:MAXB]):
             blobs[t, j] = b
-        occ[t] = (np.linalg.norm(f[PEN_BOX].astype(float) - bgbox, axis=-1) > OCC_RESID).sum() >= OCC_PIXELS
+        occ[t] = (np.linalg.norm(f[_GM["pen_box"]].astype(float) - bgbox, axis=-1) > _GM["occ_resid"]).sum() >= _GM["occ_pixels"]
     return pac, blobs, occ
 
 
@@ -89,10 +90,11 @@ def main():
     p.add_argument("--tag", default="", help="suffix of the output csv names")
     p.add_argument("--workers", type=int, default=16)
     p.add_argument("--loss-gap", type=int, default=15)
-    p.add_argument("--touch-px", type=float, default=4.5, help="Pac-Man and a ghost closer than this count as touching")
+    p.add_argument("--touch-px", type=float, default=4.5, help="Pac-Man and a ghost closer than this (64px units, scaled to the frame size) count as touching")
     p.add_argument("--blue-gap", type=int, default=12, help="blue-free steps bridged inside one frightened phase (ghosts blink near the end)")
     a = p.parse_args()
     cfg = load_config(a.config)
+    a.touch_px *= cfg["data"]["size"] / 64
     gate = cfg["gating"]
     out = ROOT / cfg["out_dir"] / "ghost_diag"
     out.mkdir(parents=True, exist_ok=True)
@@ -111,7 +113,7 @@ def main():
         check = np.array([ref.ghost_mass(np.asarray(preds[0, k]))["total"] for k in range(0, H, 50)])
         assert np.allclose(check, z[f"c{ci}_mass"][0, 0:H:50]), "--preds are not the rollouts of --condition in --raw"
         m = pool.map(_frames_pass, [preds[r] for r in range(R)])     # the full saved rollout (longer than the scored horizon)
-        gt_frames = {s: D.downsample_frames(e["frames"][start:start + H]) for s, e in eps.items()}
+        gt_frames = {s: D.downsample_frames(e["frames"][start:start + H], *D.frame_geometry(cfg)) for s, e in eps.items()}
         g_by_seed = dict(zip(gt_frames, pool.map(_frames_pass, list(gt_frames.values()))))
     m_blobs_full = np.stack([x[1] for x in m])                      # (R, saved horizon, MAXB, 3): frightened phases are timed on this
     m_pac, m_blobs, m_occ = (np.stack([x[i][:H] for x in m]) for i in range(3))
@@ -124,7 +126,8 @@ def main():
     for s in seeds:
         losses = np.nonzero(np.diff(rams[s][:, gate["lives_ram"]].astype(int)) < 0)[0] + 1 - start
         gt_ev.append([int(k) for k in losses if 0 <= k < H])
-    m_ev = [own_respawns(pac[r], H) for r in range(R)]
+    SIZE = cfg["data"]["size"]
+    m_ev = [own_respawns(pac[r], H, SIZE) for r in range(R)]
     inside = gt_pos[gt_det & pen]
     lo, hi = np.percentile(inside, 1, axis=0) - 1.0, np.percentile(inside, 99, axis=0) + 1.0
     zone = lambda P: (P[..., 0] >= lo[0]) & (P[..., 0] <= hi[0]) & (P[..., 1] >= lo[1]) & (P[..., 1] <= hi[1])
