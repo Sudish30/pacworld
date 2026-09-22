@@ -54,6 +54,8 @@ train:
   grad_clip: 1.0
   ema_decay: 0.999
   bf16: true
+  noise_on_device: true               # draw the 31M-number context-noise tensor on the GPU, not the CPU
+  prefetch: true                       # draw the next batch in a background thread while the GPU trains
   log_every: 50
   eval_every: 2500
   eval_batches: 20                     # fixed val batches (fixed sigma and noise) for val denoising loss

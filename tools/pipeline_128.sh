@@ -3,6 +3,7 @@
 set -uo pipefail
 cd /workspace/pacworld
 PY=.venv/bin/python; A=m1-2M-128-ctx6s16; B=m1-2M-128-ctx6s16-ft-uniform
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True   # 22.5 GB of the 24 GB card with the demo resident
 st() { echo "[128 $(date -u +%T)] $*"; }
 fail() { st "GATE FAILED: $*"; exit 1; }
 while tmux has-session -t b128 2>/dev/null; do sleep 20; done

@@ -11,6 +11,7 @@ import argparse
 import copy
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -36,8 +37,11 @@ def parse_args():
     return p.parse_args()
 
 
-def noise_context(ctx, ccfg, generator, device, train=True):
-    """GameNGen-style context noise. Returns (noised ctx, per-sample sigma)."""
+def noise_context(ctx, ccfg, generator, device, train=True, noise_generator=None):
+    """GameNGen-style context noise. Returns (noised ctx, per-sample sigma).
+
+    noise_generator: a generator on `device`; the full-size noise tensor is then drawn there instead of on the
+    CPU and copied over (at 128x128 that tensor is 31M numbers per batch, the slowest part of a step)."""
     B = ctx.shape[0]
     if not ccfg["enabled"]:
         return ctx, torch.zeros(B, device=device)
@@ -47,7 +51,10 @@ def noise_context(ctx, ccfg, generator, device, train=True):
         sigma = (log_s.exp() * use).to(device)
     else:
         sigma = torch.full((B,), float(ccfg["infer_sigma"]), device=device)
-    noise = torch.randn(ctx.shape, generator=generator).to(device)
+    if noise_generator is not None:
+        noise = torch.randn(ctx.shape, generator=noise_generator, device=device, dtype=ctx.dtype)
+    else:
+        noise = torch.randn(ctx.shape, generator=generator).to(device)
     return ctx + sigma[:, None, None, None] * noise, sigma
 
 
@@ -181,7 +188,7 @@ def main():
     use_bf16 = tr["bf16"] and device.type == "cuda"
 
     train, val, cache, (train_idx, val_idx) = get_datasets(cfg)
-    codec = train.codec.to(device)
+    codec = FrameCodec(cache.get("palette")).to(device)   # the training loop's own GPU copy; train/val keep theirs on the CPU
     print(f"episodes {len(train_idx)} train / {len(val_idx)} val; windows {len(train)} train / {len(val)} val"
           + (f"; palette cache, {len(codec.palette)} colours expanded on {device}" if codec.palette is not None else ""))
     val_batches = val.fixed_batches(tr["batch_size"], tr["eval_batches"], seed=args.seed)
@@ -230,6 +237,20 @@ def main():
         torch.save({"ema": ema.module.state_dict(), "step": step, "cfg": cfg}, ckpt_dir / "model1_ema.pt")
 
     gen = torch.Generator().manual_seed(args.seed + step)
+    # Batches are drawn one step ahead in a background thread (with their own generator) so that gathering the
+    # context frames from the cache overlaps with the GPU step; train.prefetch: false restores the serial loop.
+    prefetch = tr.get("prefetch", False)
+    data_gen = torch.Generator().manual_seed(10_007 * args.seed + step + 1) if prefetch else gen
+    # train.noise_on_device: draw the context noise on the GPU (same distribution, different random stream)
+    noise_gen = (torch.Generator(device=device).manual_seed(20_011 * args.seed + step + 2)
+                 if tr.get("noise_on_device", False) and device.type == "cuda" else None)
+
+    def draw():
+        b = train.sample_mixed(tr["batch_size"], data_gen, ecfg["frac"]) if ecfg else train.sample(tr["batch_size"], data_gen)
+        return tuple(x.pin_memory() for x in b) if prefetch and device.type == "cuda" else b
+
+    loader = ThreadPoolExecutor(1) if prefetch else None
+    pending = loader.submit(draw) if prefetch else None
     t_start, t_log, start_step = time.time(), time.time(), step
     model.train()
     while step < tr["steps"]:
@@ -237,13 +258,17 @@ def main():
         for pg in opt.param_groups:
             pg["lr"] = lr
 
-        ctx_u8, acts, tgt_u8 = train.sample_mixed(tr["batch_size"], gen, ecfg["frac"]) if ecfg else train.sample(tr["batch_size"], gen)
+        if prefetch:
+            ctx_u8, acts, tgt_u8 = pending.result()
+            pending = loader.submit(draw)
+        else:
+            ctx_u8, acts, tgt_u8 = draw()
         # the cached bytes cross the bus as they are stored (one byte per pixel for a palette cache) and the
         # RGB expansion happens on the GPU
         ctx = codec.decode(ctx_u8.to(device, non_blocking=True))
         tgt = codec.decode(tgt_u8.to(device, non_blocking=True)[:, None])
         acts = acts.to(device)
-        ctx, ctx_sigma = noise_context(ctx, ccfg, gen, device, train=True)
+        ctx, ctx_sigma = noise_context(ctx, ccfg, gen, device, train=True, noise_generator=noise_gen)
         sigma = sample_sigmas(d["p_mean"], d["p_std"], tgt.shape[0], "cpu", gen).to(device)
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=use_bf16):
             loss = model.loss(tgt, ctx, acts, sigma, ctx_sigma)
