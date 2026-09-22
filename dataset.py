@@ -116,10 +116,13 @@ def _load_small(job):
     path, size, mode = job
     with np.load(path) as ep:
         small = resize_frames(ep["frames"], size, mode)
-        unknown = 0
+        unknown = np.zeros((0, 3), np.uint8)
         if _LUT is not None:                       # palette cache: one byte per pixel, 255 marks "not in the palette"
-            small = _LUT[_rgb_key(small)]
-            unknown = int((small == 255).sum())
+            rgb = small
+            small = _LUT[_rgb_key(rgb)]
+            miss = small == 255
+            if miss.any():
+                unknown = np.unique(rgb[miss], axis=0)  # colours the sampled palette missed; added and rewritten later
         # align actions with frames: actions[j] follows frames[j]; the final frame has no action (-1)
         actions = np.concatenate([ep["actions"], [-1]]).astype(np.int64)
         rewards = np.concatenate([ep["rewards"], [0.0]]).astype(np.float32)
@@ -164,7 +167,7 @@ def build_cache(cfg, workers, chunk):
         lut[_rgb_key(palette)] = np.arange(len(palette), dtype=np.uint8)
         print(f"  palette: {len(palette)} colours at {size}x{size} ('{mode}'), 1 byte per pixel "
               f"({100 * (1 - 1 / 3):.0f}% smaller than RGB)")
-    frames, actions, rewards, seeds, unknown_total = [], [], [], [], 0
+    frames, actions, rewards, seeds, missed = [], [], [], [], {}
     init = (_set_lut, (lut,)) if palette is not None else (None, ())
     with Pool(workers, initializer=init[0], initargs=init[1]) as pool:
         lengths = pool.map(_episode_len, files, chunksize=16)
@@ -177,7 +180,8 @@ def build_cache(cfg, workers, chunk):
         for c0 in range(0, len(files), chunk):
             for k, (small, a, r, seed, unknown) in enumerate(pool.map(_load_small, [(f, size, mode) for f in files[c0:c0 + chunk]]), c0):
                 assert len(small) == lengths[k], f"{files[k]} changed while caching"
-                unknown_total += unknown
+                if len(unknown):
+                    missed[k] = unknown
                 if stream:
                     fp.write(np.ascontiguousarray(small).tobytes())
                 else:
@@ -188,8 +192,25 @@ def build_cache(cfg, workers, chunk):
             print(f"  cached {min(c0 + chunk, len(files))}/{len(files)} episodes")
         if stream:
             fp.close()
-    if palette is not None and unknown_total:
-        raise SystemExit(f"palette cache is NOT lossless: {unknown_total} pixels are not in the {len(palette)}-colour palette")
+    if palette is not None and missed:
+        # the sample missed some rare colours: add them to the palette and rewrite only the episodes that use them
+        extra = np.unique(np.concatenate(list(missed.values())), axis=0)
+        palette = np.concatenate([palette, extra])
+        if len(palette) > 255:
+            raise SystemExit(f"{len(palette)} colours: too many for one byte")
+        lut = np.full(1 << 24, 255, np.uint8)
+        lut[_rgb_key(palette)] = np.arange(len(palette), dtype=np.uint8)
+        print(f"  {len(extra)} colours the sample missed, used in {len(missed)} episodes: palette now {len(palette)}; rewriting those episodes")
+        if not stream:
+            raise SystemExit("rewriting is only implemented for streamed .npy caches")
+        mm = np.load(out, mmap_mode="r+")
+        with Pool(workers, initializer=_set_lut, initargs=(lut,)) as pool:
+            for k, (small, _, _, _, unknown) in zip(missed, pool.map(_load_small, [(files[k], size, mode) for k in missed])):
+                if len(unknown):
+                    raise SystemExit(f"palette cache is NOT lossless: {files[k]} still has colours outside the palette")
+                mm[starts[k]:starts[k + 1]] = small
+        mm.flush()
+        del mm
     meta = dict(actions=np.concatenate(actions), rewards=np.concatenate(rewards),
                 ep_seed=np.asarray(seeds, dtype=np.int64), ep_start=starts)
     if palette is not None:
@@ -411,7 +432,7 @@ def check_windows(cfg, train, val, cache, n_episodes, seed):
     n_steps = 0
     for e in rng.choice(len(starts) - 1, n_episodes, replace=False):
         a, b = int(starts[e]), int(starts[e + 1])
-        ep = (cache["frames"][a:b], cache["actions"][a:b])
+        ep = (train.codec.decode_np(cache["frames"][a:b]), cache["actions"][a:b])   # History works in RGB
         for start in sorted({train.K, train.K + 1, -int(offsets.min()) - 1, -int(offsets.min()) + 3, 100}):
             if start < train.K or start >= b - a - 1:
                 continue
