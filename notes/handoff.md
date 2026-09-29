@@ -71,6 +71,86 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## PRE-REGISTRATION: learned controls / latent actions (written 2026-09-29 before any LAM, code array or latent/no-action run exists)
+Design: `notes/latent_actions_design.md` (rev 2). The pipeline: a latent action model (VQ, 8 codes) is trained on frames only; its codes replace the actions for a from-scratch ctx6s16 world model; keys map to codes through a label-free key map plus a prior-gated resolver. A no-action model with the same recipe is the control. Status at commit: no pod (RunPod balance negative); Stage 0 code starts now; no GPU training until Stage 0 is done and reviewed.
+
+**Hard rule:** true actions and RAM are used only for evaluation, never for training or model selection. Same frozen
+split `configs/val_episodes_2m.json` (388 val episodes, sha256 `7ba75f89...`) for every model and every measure.
+
+**Measured before locking G1** (`eval/visible_ceiling.py`, `configs/lam_agreement.yaml`, no model involved; the 35
+frozen-val episodes of the 200k set, 2,085 decision events). Pac-Man's real movement stands in for a perfect code;
+best mapping fitted on half the episodes, scored on the other half:
+
+| feature | → new RAM direction | → true 9-way action |
+|---|---|---|
+| RAM, one step | 0.914 | 0.548 |
+| 64px pixel detector, same transition as the action (lag 0) | 0.407 | 0.269 |
+| **64px pixel detector, next transition (lag 1)** | **0.788** | 0.455 |
+| majority class | 0.357 | 0.232 |
+
+The frames lag RAM by about one step: pixel displacement correlates with the RAM displacement one step earlier at
+0.76 / 0.81 (x / y) vs 0.63 / 0.72 for the same step. **The lag is fixed at 1: G1 and G2 compare `codes[i]` with
+`actions[i-1]`, and no other lag is tried later.** Replayed evaluations (`lam_mapped`) apply the keys of `actions[t-1]`
+one step later. G1 uses the new direction, not the 9-way action, which diagonal actions cap at 0.55 for any
+frame-based code.
+
+**Precondition for Stage 1 (pod):** `eval/visible_ceiling.py` rerun on the full 388-episode split. If
+`pix_lag1 -> new_direction` is **below 0.76**: stop and ask. No bar is changed without the owner.
+
+**Stage 1: LAM** (arms A and B only). Label-free checks run first, and the arm choice is committed before any label
+is read.
+
+| id | check | reads | pass | on failure |
+|---|---|---|---|---|
+| L1 | label-free key map (Pac-Man detector displacement per code over the code's own transition): every direction key gets at least one code with purity ≥ 0.5 | pixels | all four | arm excluded |
+| L2 | codebook perplexity on val | pixels | ≥ 4.0 (of 8) | arm excluded |
+| L3 | code gain: val decoder MSE with codes shuffled within the batch / with inferred codes, paired bootstrap (1,000 resamples) | pixels | > 1, 95% CI excludes 1 | arm excluded |
+| sel | T_det: on val transitions where the detector sees Pac-Man's movement direction change, accuracy of the arm's label-free key map at the new direction | pixels | higher wins; A if within 0.03 | no arm left: **STOP and report** (labels never read) |
+| **G1** | decision events (RAM direction changes at i to a direction contained in `actions[i-1]`; the first 90 steps, 12 before to 90 after each life loss, and tunnel wraps excluded): accuracy of the best many-to-one map `codes[i]` → new direction, fitted on one half of the val episodes and scored on the other (2-fold, pooled) | labels + RAM | **≥ 0.70 and ≥ majority-class rate + 0.30** | **STOP and report** |
+| **G2** | keys held in `actions[i-1]` → resolver on the real context up to frame i → code ĉ. Compare dir(ĉ) with dir(`codes[i]`), where dir() is the label-free key map (UP / RIGHT / DOWN / LEFT, or NONE for environment codes) and agreement means equal labels | labels | **≥ 0.65 at decision events and ≥ 0.85 over all eligible steps** | **STOP and report** |
+
+On any Stage 1 failure: stop and report. No retuning to pass. Any LAM other than arms A and B needs its own
+pre-registration. Cost at this stop point: Stage 0 + 1 ≈ $3.25. **After Stage 1, stop for review in any case:**
+label-free checks, arm choice, G1 and G2 are shown to the owner before any Stage 2 spend.
+
+**Stage 2: world models** (`m1-2M-latent-ctx6s16` and `m1-2M-noact-ctx6s16`, 100k @ 1e-4, then `-ft-uniform` 15k @
+1e-5; from scratch; uniform window sampling, no `events:` section). Two pods, only after Stage 1 passes, the owner says
+go, and the RunPod balance is $25 or more.
+
+| id | check | pass | on failure |
+|---|---|---|---|
+| W1 | both runs reach 100k + 15k with finite losses; parent checkpoints byte-identical after the anneal | yes | debug and rerun, no conclusions |
+| W2 | val denoise loss on identical fixed val batches, read at the **20k-step** eval of both runs | latent strictly lower than no-action | **pause both runs and ask** |
+
+W2 alone proves little: the codes were computed from the true next frame, so a lower loss can come from information
+about that frame rather than from control. P1 is the real test.
+
+**Stage 3: evaluation.** The latent model is scored in `lam_mapped` mode (true action → keys, one step later →
+resolver → code).
+
+| id | check | pass |
+|---|---|---|
+| V | junction-test validity, checked before the latent model is scored | labeled success **≥ 0.80** and labeled − no-action **≥ 0.30**; otherwise the test is fixed on those two models only |
+| **P1** | junction controllability success (200 val states x 4 held directions x 3 seeds; constants in `configs/eval_junction.yaml`, committed before any run). Bootstrap 95% CI over the 200 states (1,000 resamples) for success and for R_j = (latent − none) / (labeled − none) | **success ≥ 0.70 and R_j ≥ 0.70** (point estimates; CIs reported) |
+| P2 | responsiveness @15 (standard rollouts) | ≥ 0.70 |
+| P3 | world quality @450 | wall IoU ≥ 0.943; pellet IoU ≥ 0.792; Pac-Man error ≤ 23.8 px; longest pen stay median 70-95; 0/30 parked 200+; release hazard lag 91-150 ≥ 0.90; released within 150 steps orange ≥ 95%, cyan ≥ 90%, pink ≥ 80% |
+
+**Stage 4: side demo.** D1: `serve/server_lam.py` (port 8002; resolver, re-inference and watchdog on) streams ≥ 14.9
+fps over 450 frames with p95 < 66.7 ms and no false watchdog resets.
+
+**Decision rule:** "learned controls work" only if every Stage 1 gate passes, plus W1, W2, V, P1, P2, P3 and D1. The
+main demo stays on `m1-2M-ctx6s16-ft-uniform` either way. The side demo stays up for playtesting only if P1-P3 and D1
+pass.
+
+**Reported, not gating:**
+- the unchosen arm's numbers;
+- 9-way agreement against its ceiling, NMI, heading-conditioned accuracy, ghost-turn code-switch lift;
+- `lam_oracle` and `lam_direct` results, and the re-inference ablation;
+- every metric for the no-action model;
+- ghost counts under both gatings;
+- wall entries under illegal commands;
+- how often the resolver forces environment codes.
+
 ## VERDICT on the 128x128 polish run (scored 2026-09-22 18:15 UTC against the rules fixed in 77bfd89): FAILS - demo stays on the 64px ft-uniform
 Both runs finished clean: `m1-2M-128-ctx6s16` 100k steps in 490 min (3.4 it/s), `m1-2M-128-ctx6s16-ft-uniform` 15k in 74 min; val denoise 0.0003 (64px ft-uniform: 0.0006); parent checkpoints byte-identical afterwards. Cost about $9. Results: `eval/results/m1-2M-128-ctx6s16-ft-uniform/`, `eval/results/compare_128.csv`, `logs/eval_m1-2M-128-ctx6s16-ft-uniform.log`.
 

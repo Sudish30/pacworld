@@ -51,6 +51,15 @@ The pen timer, measured as how long the ghost pen stays occupied (`eval/pen_time
 Its pen numbers are not comparable across resolutions: the occupancy measure is not resolution-invariant
 (ground truth is 78 steps at 64px but 38 at 128px). Details in `notes/handoff.md`.
 
+## In progress: learned controls (latent actions)
+
+A Genie-style extension, pre-registered in [`notes/handoff.md`](notes/handoff.md) with the design in
+[`notes/latent_actions_design.md`](notes/latent_actions_design.md). A latent action model infers 8 discrete codes from
+frames alone. The world model is trained on those codes instead of the recorded actions, and the arrow keys are mapped
+to codes. True actions and RAM are used only for evaluation. Two variants of the latent action model are trained:
+arm A is generic, and **arm B weights its reconstruction loss around Pac-Man using the pixel detector
+(`eval/detectors.py`)**. The detector uses no action labels or RAM, but it does tell arm B which sprite is the player.
+
 ## Repository layout
 
 ```

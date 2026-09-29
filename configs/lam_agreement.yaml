@@ -1,0 +1,26 @@
+# Label-side evaluation of the latent-action project (eval/visible_ceiling.py, later eval/lam_agreement.py).
+# EVALUATION ONLY: these scripts read true actions and RAM. Nothing under training or key mapping reads this config.
+data:
+  folder: [data/agent, data/2m/agent]  # the 2.2M-frame set; missing folders are skipped (the Mac has only data/agent)
+  val_episodes: configs/val_episodes_2m.json   # the frozen split: 388 val episodes
+  size: 64
+  resample: box                        # the 64px cache's resize, so the detector sees what the LAM sees
+
+decision_events:                       # metrics.responsiveness_events: RAM direction changes at i to a direction contained in actions[i-1]
+  direction_ram: 56                    # ram[56] & 3: 0 up, 1 right, 2 down, 3 left
+  pac_x_ram: 10
+  pac_y_ram: 16
+  lives_ram: 123
+  start_of_life_steps: 90              # excluded after the episode start and after every life loss (as in the ghost gating)
+  death_anim_steps: 12                 # excluded before every life loss
+  max_step: 8                          # RAM units per step; a larger jump is a respawn or a tunnel wrap -> excluded
+  min_move_px: 0.3                     # detector moves below this (64px units) count as "no move"
+  folds: 2                             # best mapping fitted on one half of the val episodes, scored on the other
+
+detector:                              # same thresholds as configs/eval.yaml (64px)
+  residual_threshold: 20
+  fit_threshold: 18
+  min_alpha: 0.25
+  min_blob_weight: 0.8
+  pellet_present_frac: 0.5
+  wall_pinkness: 0.5
