@@ -99,6 +99,44 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
     observer would fail (C4 at N=8: 0.57), and two wrong predicted values.
   - The scored sweep needs a GPU (a tiny UNet runs at ~300 ms per step on the Mac CPU); the code and a CPU pilot come
     first.
+- **STEP 4a D0 and I0, computed before any model trains** (`eval/timer_eval.py --ideal-only`, all 23 cells,
+  60 starts each, 200 observer draws per start, bootstrap over the 20 test episodes).
+  - D0 passes everywhere: the detector gives lag = N on every real start.
+  - Also checked: nothing outside the roaming area changes during a pen stay, so the game leaks no clock.
+
+| layout | N | reach | starts | ideal on-time (tol 2) [95% CI] | ideal on-time (tol max(2, 0.1N)) | ideal median \|lag−N\| | ideal release fraction [95% CI] | D0 |
+|---|---|---|---|---|---|---|---|---|
+| C4 | 3 | 4 | 60 | 1.000 [1.000, 1.000] | 1.000 (tol 2) | 0 | 1.000 [1.000, 1.000] | pass |
+| C4 | 8 | 4 | 60 | 0.431 [0.423, 0.439] | 0.431 (tol 2) | 3 | 1.000 [1.000, 1.000] | pass |
+| C4 | 17 | 4 | 60 | 0.139 [0.134, 0.143] | 0.139 (tol 2) | 9 | 0.997 [0.996, 0.998] | pass |
+| C4 | 33 | 4 | 60 | 0.064 [0.060, 0.068] | 0.087 (tol 3.3) | 19 | 0.978 [0.976, 0.980] | pass |
+| C4 | 65 | 4 | 60 | 0.031 [0.028, 0.034] | 0.077 (tol 6.5) | 39 | 0.942 [0.938, 0.946] | pass |
+| C10 | 3 | 10 | 60 | 1.000 [1.000, 1.000] | 1.000 (tol 2) | 0 | 1.000 [1.000, 1.000] | pass |
+| C10 | 8 | 10 | 60 | 1.000 [1.000, 1.000] | 1.000 (tol 2) | 0 | 1.000 [1.000, 1.000] | pass |
+| C10 | 10 | 10 | 60 | 1.000 [1.000, 1.000] | 1.000 (tol 2) | 0 | 1.000 [1.000, 1.000] | pass |
+| C10 | 17 | 10 | 60 | 0.258 [0.251, 0.266] | 0.258 (tol 2) | 5 | 1.000 [1.000, 1.000] | pass |
+| C10 | 33 | 10 | 60 | 0.078 [0.074, 0.083] | 0.109 (tol 3.3) | 15 | 0.987 [0.985, 0.989] | pass |
+| C10 | 65 | 10 | 60 | 0.036 [0.034, 0.038] | 0.087 (tol 6.5) | 36 | 0.952 [0.948, 0.956] | pass |
+| C10 | 97 | 10 | 60 | 0.023 [0.021, 0.025] | 0.082 (tol 9.7) | 57 | 0.927 [0.923, 0.931] | pass |
+| C10 | 200 | 10 | 60 | 0.011 [0.010, 0.013] | 0.078 (tol 20) | 121 | 0.890 [0.885, 0.895] | pass |
+| S10 | 3 | 97 | 60 | 1.000 [1.000, 1.000] | 1.000 (tol 2) | 0 | 1.000 [1.000, 1.000] | pass |
+| S10 | 8 | 97 | 60 | 0.451 [0.436, 0.470] | 0.451 (tol 2) | 3 | 0.955 [0.951, 0.959] | pass |
+| S10 | 17 | 97 | 60 | 0.901 [0.829, 0.965] | 0.901 (tol 2) | 0 | 1.000 [1.000, 1.000] | pass |
+| S10 | 24 | 97 | 60 | 0.326 [0.308, 0.345] | 0.326 (tol 2.4) | 4 | 0.891 [0.864, 0.917] | pass |
+| S10 | 33 | 97 | 60 | 0.861 [0.804, 0.916] | 0.865 (tol 3.3) | 0 | 1.000 [1.000, 1.000] | pass |
+| S10 | 65 | 97 | 60 | 0.801 [0.685, 0.895] | 0.825 (tol 6.5) | 0 | 1.000 [1.000, 1.000] | pass |
+| S10 | 80 | 97 | 60 | 0.125 [0.107, 0.144] | 0.361 (tol 8) | 12 | 0.594 [0.551, 0.633] | pass |
+| S10 | 97 | 97 | 60 | 0.299 [0.260, 0.336] | 0.601 (tol 9.7) | 6 | 1.000 [1.000, 1.000] | pass |
+| S10 | 145 | 97 | 60 | 0.036 [0.032, 0.040] | 0.204 (tol 14.5) | 34 | 0.990 [0.988, 0.991] | pass |
+| S10 | 200 | 97 | 60 | 0.019 [0.018, 0.021] | 0.146 (tol 20) | 68 | 0.960 [0.957, 0.963] | pass |
+
+  - The observer's curve is the rule's prediction: exact where −N is an offset in reach; spread in gaps; a geometric
+    wait beyond the reach.
+  - Two costs of striding show up in the prediction itself: gaps (S10 N=8: 0.451, N=24: 0.326, N=80: 0.125) and
+    aliasing with the previous pen stay (S10 N=97: 0.299).
+  - This led to **Amendment 1** (`notes/timer_rule_design.md` §6): R2's absolute release bar would fail a perfect
+    observer at S10 N=24 (0.891) and N=80 (0.594). It is now min(0.90, ideal − 0.10). This was made before any model
+    result exists.
 - **STEP 2, the latent-action pre-registration:** done in 6bb6039 (G1 lag 1, ≥ 0.70 and majority + 0.30; G2 by
   direction, 0.65 / 0.85; §9; `visible_ceiling.py`; `lam_agreement.yaml`; README note on arm B).
 

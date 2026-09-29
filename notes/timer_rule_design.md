@@ -119,6 +119,19 @@ Cells are classified before training.
   longer than its reach, or that the game leaks a clock.
 - Point estimates decide the verdict; bootstrap CIs over test episodes are reported with every number.
 
+### Amendment 1 (2026-09-29, before any model was trained; the reason is recorded in `notes/handoff.md`)
+
+The ideal observer (I0, table in `notes/handoff.md`) itself releases in only 0.891 of starts at S10 N=24 and 0.594
+at S10 N=80. After it overshoots a gap, it meets context patterns that never occur in training, and there it parks.
+R2's absolute release bar (≥ 0.90) would therefore fail a perfect model in both gap cells. That makes it a wrong
+criterion, found from the prediction and not from any result.
+
+R2 now reads: **release fraction ≥ min(0.90, ideal − 0.10) and median |lag − N| ≤ ideal median + 3.**
+
+Nothing else changes. Also noted, unchanged: at S10 N=97 the observer is on time (tol 2) in only 0.299 of starts,
+because far offsets fall inside the previous pen stay. R1's bar there is therefore min(0.80, 0.199) = 0.199, a weak
+test of that cell.
+
 ## 7. What we conclude if the rule does not hold
 
 - **R3 fails.** Either the game leaks elapsed time (checked first: a pixel-level audit of frames c+1..c+N−1, whose

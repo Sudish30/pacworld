@@ -1,0 +1,95 @@
+# Hidden-timer rule on a synthetic game (notes/timer_rule_design.md; pre-registered in ab0a961).
+# One variable between layouts: the context offsets. N (the hidden pen period) is chosen per run from grid.
+
+game:
+  size: 16
+  colors:                              # exact palette; the detector classifies pixels by nearest colour
+    background: [0, 0, 60]
+    wall: [200, 100, 100]
+    player: [230, 200, 60]
+    ghost: [230, 40, 40]
+  pen_box: [1, 6, 4, 9]                # wall outline rows 1..4, cols 6..9 (inclusive); interior = the 2x2 ghost cell
+  pen_cell: [2, 7]                     # top-left of the 2x2 ghost while penned
+  release_cell: [6, 7]                 # top-left of the ghost at the release frame, just below the pen
+  roam_rows: [6, 13]                   # allowed top-left rows of a 2x2 roaming sprite (inclusive)
+  roam_cols: [1, 13]
+  keep_direction: 0.8                  # random walk with inertia (player and roaming ghost)
+  roam_min: 10                         # the ghost roams D ~ Uniform{roam_min..roam_max} steps, then is captured
+  roam_max: 30
+  episode_len: 3000
+  n_train: 60
+  n_val: 4                             # val loss only
+  n_test: 20
+  train_seed0: 1000                    # episode e of a split uses seed seed0 + e; test seeds never overlap train
+  val_seed0: 5000
+  test_seed0: 9000
+
+layouts:
+  C4: [-4, -3, -2, -1]
+  C10: [-10, -9, -8, -7, -6, -5, -4, -3, -2, -1]
+  S10: [-97, -81, -65, -49, -33, -17, -4, -3, -2, -1]
+
+grid:                                  # the 23 pre-registered cells
+  C4: [3, 8, 17, 33, 65]
+  C10: [3, 8, 10, 17, 33, 65, 97, 200]
+  S10: [3, 8, 17, 24, 33, 65, 80, 97, 145, 200]
+
+model:                                 # pacworld's UNet, small and unconditional
+  widths: [64, 128]                    # 16 -> 8 px
+  blocks_per_level: 2
+  attn_levels: [1]                     # attention at 8 px
+  heads: 4
+  cond_dim: 128
+  action_embed_dim: 16
+  n_actions: 1
+  groupnorm_groups: 32
+  fourier_dim: 64
+  dropout: 0.0
+
+diffusion:                             # identical to the pacworld runs
+  sigma_data: 0.5
+  p_mean: -0.4
+  p_std: 1.2
+  sigma_min: 0.002
+  sigma_max: 20.0
+  rho: 7
+  rollout_steps: 3
+
+ctx_noise:                             # identical to the pacworld runs
+  enabled: true
+  prob: 0.5
+  sigma_min: 0.002
+  sigma_max: 0.5
+  infer_sigma: 0.0
+
+train:
+  steps: 15000
+  batch_size: 128
+  lr: 1.0e-4
+  lr_min: 1.0e-5
+  warmup_steps: 100
+  weight_decay: 0.01
+  grad_clip: 1.0
+  ema_decay: 0.999
+  bf16: true
+  log_every: 100
+  eval_every: 5000
+  val_batches: 10
+  device: auto
+  checkpoint_root: checkpoints/timer   # <root>/<layout>-N<N>/model.pt
+  wandb_project: pacworld
+  wandb_group: timer-rule
+
+eval:
+  starts_per_episode: 3                # captures used as rollout starts per test episode
+  min_history: 100                     # real frames before the capture (>= the largest reach, 97)
+  horizon_mult: 2                      # horizon = horizon_mult * N + horizon_add
+  horizon_add: 50
+  sampler_steps: 3
+  ctx_sigma: 0.0
+  batch: 64
+  tol_strict: 2                        # R1
+  tol_rel: 0.1                         # R3: tol = max(tol_strict, tol_rel * N)
+  ideal_draws: 200                     # Monte Carlo draws of the ideal observer per start
+  bootstrap: 2000                      # resamples over test episodes
+  out_dir: eval/results/timer
