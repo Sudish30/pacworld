@@ -179,6 +179,50 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **STEP 2, the latent-action pre-registration:** done in 6bb6039 (G1 lag 1, ≥ 0.70 and majority + 0.30; G2 by
   direction, 0.65 / 0.85; §9; `visible_ceiling.py`; `lam_agreement.yaml`; README note on arm B).
 
+## PRE-REGISTRATION: external baseline, DIAMOND's released Ms. Pac-Man world model (STEP 5; written 2026-09-29 before any DIAMOND rollout exists)
+**What exists.** DIAMOND (Alonso et al. 2024, MIT license) released trained Atari-100k world models:
+- Hugging Face `eloialonso/diamond`, `atari_100k/models/MsPacman.pt`, 54,323,485 bytes, sha256 `91b213ef3f9e9091...`;
+- denoiser 4.41M params, 4-frame context, 9 actions;
+- preprocessing: the full 210x160 frame, max over the last 2 of 4 skipped frames, cv2 area resize to 64x64 RGB;
+- trained on 100k agent steps, with episodes ending at every life loss;
+- its world model is sampled with 3 Euler steps and was built for 15-step imagination rollouts.
+
+It is scored in our harness **without retraining**.
+
+**Protocol.**
+- The same 10 held-out episodes (the 10 longest of `configs/val_episodes.json`) x 3 sampler seeds, start step 100,
+  900 steps, the recorded actions, DIAMOND's own sampler (3-step Euler, sigma 2e-3 to 5, rho 7).
+- The episodes are re-simulated from their seeds and actions, which yields DIAMOND-format frames of exactly the same
+  game states.
+- The detectors are rebuilt for DIAMOND's geometry: the same maze reference passed through DIAMOND's resize, and
+  detection restricted to the maze rows. Pac-Man positions are converted to our 64px-equivalent scale.
+- Pen occupancy uses the pen box mapped to DIAMOND's rows. The box counts as occupied if it was occupied in any of the
+  last 4 frames, because 2-frame max-pooling makes a lone penned ghost flicker.
+
+**Validity gates** (checked on ground truth before DIAMOND is scored):
+- **V-D1**: the re-simulation reproduces our recorded frames bit for bit.
+- **V-D2**: on DIAMOND-format ground truth, Pac-Man is detected in ≥ 95% of gated frames.
+- **V-D3**: ground-truth pen occupancy under the smoothed measure gives a longest-run median of 70-95 steps (ours: 78)
+  and 0/30 runs of 200+.
+
+If V-D3 fails, the pen metric is declared invalid for DIAMOND and only the standard metrics are reported.
+
+**Prediction P-D1 (the timer rule).** DIAMOND's 4-consecutive-frame context parks ghosts: the pen is occupied 200+
+consecutive steps in **≥ 10/30 rollouts** (Model 1: 16/30, ctx4: 17/30, real game 0/30).
+- Stated in advance as an alternative explanation: DIAMOND never trained across a life loss, so it may rarely render
+  deaths and respawns.
+- If its rollouts contain **fewer than 5 own respawns in total**, P-D1 is declared **untestable**, neither passed nor
+  failed.
+- A P-D1 failure with 5 or more respawns counts against the rule and is reported as such.
+
+**Reported, not gated** (episode-bootstrap CIs, next to Model 1 and ft-uniform, each model against its own ground
+truth): wall IoU divided by its own ground-truth ceiling, pellet IoU, Pac-Man error (64px-equivalent),
+responsiveness @15/150/450, gated ghost count against DIAMOND-format ground truth, own respawns.
+
+**Caveat, stated with any result:** 900 steps is 60x DIAMOND's 15-step imagination horizon, and it was trained on 1/20
+of our data. The comparison measures long-horizon coherence, which DIAMOND was not built for. It does not rank the
+models' designs.
+
 ## Learned controls: Stage 0 status (2026-09-29; the rules are in the pre-registration below, commit 6bb6039)
 **Blocked on the pod.** On 2026-09-29 `runpodctl user` showed a balance of **-$0.06** with no pods. The network
 volume `v3kyag5rhv` still exists. The owner is topping up. Stage 1 and all GPU training wait for the owner's go.
