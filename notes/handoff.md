@@ -88,6 +88,17 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
   - **No key rotation is needed because of the repo.** The earlier handoff said to revoke the RunPod API key after
     pods 2 and 3, since it was placed in their env and `~/.runpod/config.toml`. Those pods are terminated, and their
     disks with them. Rotating that key remains a good precaution; it is the owner's call.
+- **STEP 3 is blocked:** the RunPod balance is -$0.06 (checked 2026-09-29 after Stage 0 on the Mac). The stop
+  condition is to keep it at $25 or more, so no pod job starts until the owner tops up. Next when unblocked:
+  `tools/stage0_pod.sh`.
+- **STEP 4a pre-registered:** `notes/timer_rule_design.md`, the synthetic hidden-timer game.
+  - 23 small diffusion models, layouts C4 / C10 / S10, N from 3 to 200.
+  - Criteria R1-R4, D0 and I0 are scored against an ideal observer limited to each layout's offsets, which is
+    computed from training data before any model trains.
+  - Two errors were caught in the draft before it was committed: a fixed ≤ 0.40 out-of-reach bar that a perfect
+    observer would fail (C4 at N=8: 0.57), and two wrong predicted values.
+  - The scored sweep needs a GPU (a tiny UNet runs at ~300 ms per step on the Mac CPU); the code and a CPU pilot come
+    first.
 - **STEP 2, the latent-action pre-registration:** done in 6bb6039 (G1 lag 1, ≥ 0.70 and majority + 0.30; G2 by
   direction, 0.65 / 0.85; §9; `visible_ceiling.py`; `lam_agreement.yaml`; README note on arm B).
 

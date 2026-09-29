@@ -389,7 +389,7 @@ proves the codes carry control.
 - States: 200 val states (seed 0), each with Pac-Man 2-6 steps before a junction of the maze graph (3 or more exits),
   at least 100 steps into the episode, and outside life-loss windows. Each state's context is its real frames.
 - Commands: each of the 4 directions held for 16 steps, 3 sampler seeds. That is 2,400 short rollouts per model and
-  mode, a few minutes of GPU time.
+  mode, a small fraction of a GPU-hour.
 - **Success** for a legal command (an exit of that junction; reversal is always legal): within 10 steps of Pac-Man
   reaching the junction, the detector's movement direction (`metrics.movement_direction`) equals the command for 3
   consecutive steps.
@@ -501,11 +501,11 @@ Speeds come from the handoff:
 - `bench_128.py`: 64px training at 10.65 it/s;
 - ctx6s16: 100k steps in 302 min on a slow host.
 
-| stage | work | pod-hours (wall) | cost |
+| stage | work | GPU-hours | cost |
 |---|---|---|---|
 | 0 | pod bootstrap and wandb gate, Pac-Man positions (~20 min CPU), smoke runs | ~1.0 | ~$0.75 |
 | 1 | 2 LAMs (~55 min each at ~9 it/s), codes (~5 min each), checks and selection (~20 min), prior (~20 min), key map and τ (~10 min), label eval (~20 min) | ~3.3 | ~$2.50 |
-| 2 | 2 WMs x (100k ≈ 3.3 h + 15k ≈ 0.5 h) | ~7.6 GPU-h (3.8 h wall on 2 pods, 7.6 h on 1) | ~$5.60 |
+| 2 | 2 WMs x (100k + 15k steps), ~3.8 GPU-hours each | ~7.6 | ~$5.60 |
 | 3 | rollouts: latent mapped + oracle + no-action (~20 min each); junction test, 4 model-modes (~30 min); pen/ghost analyses (~45 min) | ~2.3 | ~$1.70 |
 | 4 | side-demo fps check, playtest | ~1.0 | ~$0.75 |
 | **total** | | **~15** | **~$11.50 (budget $20)** |
@@ -539,14 +539,6 @@ The handoff's last reading (2026-09-22) was 81 of 100 GB used. Procedure, on the
   - 4 WM checkpoint folders ~1.5 GB;
   - outputs ~0.2 GB;
   - eval predictions ~3 GB. Junction-test frames are kept for one seed only; positions are kept for all.
-
-**Calendar time.**
-- Stage 0: one working session to implement, with your review of each piece.
-- Stage 1: about half a day, including a pause for your read of G1 and G2.
-- Stage 2: ~4 h on two pods (fine overnight).
-- Stage 3: about half a day.
-- Stage 4: an hour plus your playtest.
-- Roughly 3 days end to end.
 
 ## 11. Files and folders
 
