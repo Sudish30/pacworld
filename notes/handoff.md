@@ -137,6 +137,45 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
   - This led to **Amendment 1** (`notes/timer_rule_design.md` §6): R2's absolute release bar would fail a perfect
     observer at S10 N=24 (0.891) and N=80 (0.594). It is now min(0.90, ideal − 0.10). This was made before any model
     result exists.
+- **STEP 6, part 1 (Mac, `eval/bootstrap_ci.py`, `configs/stats.yaml`): episode-bootstrap 95% CIs** for every
+  metric in `per_step.csv`, at horizon 450, with the original numbers alongside.
+  - Method: 10,000 resamples of the 10 held-out episodes, each keeping its 3 sampler seeds. Paired differences use the
+    same episodes for both runs. Full output, including horizons 15 and 150: `eval/results/stats/bootstrap_ci.json`.
+  - Every original number reproduces as the mean over episodes, except two small differences where some rollouts
+    have NaN Pac-Man error: ft-events 18.17 vs 18.24, and 128px 45.48 vs 43.78 at 128px scale.
+
+| run | wall_iou@450 | pellet_iou@450 | pac_err@450 | responsiveness@450 | ghost_count@450 |
+|---|---|---|---|---|---|
+| model1 | 0.958 [0.957, 0.960] (orig 0.958) | 0.839 [0.821, 0.853] (orig 0.839) | 19.479 [13.265, 25.420] (orig 19.479) | 0.303 [0.228, 0.384] (orig 0.303) | 1.646 [1.000, 2.438] (orig 1.646) |
+| ctx4 | 0.959 [0.955, 0.962] (orig 0.959) | 0.848 [0.828, 0.872] (orig 0.848) | 18.989 [13.220, 24.811] (orig 18.989) | 0.374 [0.283, 0.468] (orig 0.374) | 2.000 [1.250, 2.750] (orig 2.000) |
+| ctx8 | 0.960 [0.958, 0.962] (orig 0.960) | 0.829 [0.808, 0.852] (orig 0.829) | 19.063 [12.568, 25.163] (orig 19.063) | 0.382 [0.259, 0.511] (orig 0.382) | 1.469 [0.938, 2.000] (orig 1.469) |
+| ctx6s16 | 0.952 [0.949, 0.956] (orig 0.952) | 0.843 [0.816, 0.869] (orig 0.843) | 13.676 [9.076, 18.574] (orig 13.676) | 0.385 [0.361, 0.413] (orig 0.385) | 2.031 [1.010, 2.833] (orig 2.031) |
+| ft-uniform | 0.955 [0.953, 0.958] (orig 0.955) | 0.845 [0.825, 0.864] (orig 0.845) | 14.574 [10.358, 19.290] (orig 14.574) | 0.429 [0.395, 0.464] (orig 0.429) | 2.323 [1.188, 3.458] (orig 2.323) |
+| ft-events | 0.952 [0.949, 0.956] (orig 0.952) | 0.845 [0.833, 0.861] (orig 0.845) | 18.171 [14.940, 21.349] (orig 18.236) | 0.438 [0.408, 0.467] (orig 0.438) | 2.615 [1.750, 3.219] (orig 2.615) |
+| r148 | 0.934 [0.930, 0.937] (orig 0.934) | 0.827 [0.791, 0.862] (orig 0.827) | 14.515 [11.709, 17.517] (orig 14.515) | 0.411 [0.362, 0.457] (orig 0.411) | 2.073 [1.219, 2.750] (orig 2.073) |
+| 3m-r148-ft-fright | 0.928 [0.925, 0.931] (orig 0.928) | 0.828 [0.799, 0.854] (orig 0.828) | 15.633 [11.209, 20.315] (orig 15.633) | 0.430 [0.382, 0.479] (orig 0.430) | 2.688 [2.010, 3.406] (orig 2.688) |
+| 3m-ctx6s16-ft-fright | 0.958 [0.956, 0.961] (orig 0.958) | 0.837 [0.823, 0.853] (orig 0.837) | 17.831 [13.682, 22.189] (orig 17.964) | 0.394 [0.364, 0.422] (orig 0.394) | 2.146 [1.083, 3.354] (orig 2.146) |
+| 128-ft-uniform | 0.970 [0.964, 0.976] (orig 0.970) | 0.831 [0.799, 0.865] (orig 0.831) | 45.484 [30.719, 59.520] (orig 43.781) | 0.258 [0.230, 0.286] (orig 0.258) | 2.042 [1.167, 2.917] (orig 2.042) |
+
+| paired difference | wall_iou@450 | pellet_iou@450 | pac_err@450 | responsiveness@450 | ghost_count@450 |
+|---|---|---|---|---|---|
+| ctx4 - model1 | +0.000 [-0.004, +0.004] | +0.009 [-0.004, +0.027] | -0.489 [-2.659, +1.314] | +0.071 [+0.014, +0.129] * | +0.354 [-0.604, +1.500] |
+| ctx8 - ctx4 | +0.001 [-0.002, +0.004] | -0.018 [-0.027, -0.010] * | +0.074 [-2.420, +2.602] | +0.009 [-0.074, +0.117] | -0.531 [-1.094, +0.500] |
+| ctx6s16 - ctx4 | -0.007 [-0.011, -0.002] * | -0.005 [-0.030, +0.023] | -5.314 [-11.640, -0.541] * | +0.011 [-0.081, +0.098] | +0.031 [-0.406, +0.500] |
+| ft-uniform - ctx6s16 | +0.004 [+0.002, +0.005] * | +0.002 [-0.019, +0.022] | +0.898 [-2.526, +4.748] | +0.044 [+0.009, +0.080] * | +0.292 [-0.354, +0.771] |
+| 128-ft-uniform - ft-uniform | +0.015 [+0.009, +0.020] * | -0.014 [-0.043, +0.014] | +30.910 [+17.880, +42.707] * | -0.172 [-0.216, -0.125] * | -0.281 [-0.938, +0.115] |
+
+  - **Survives:**
+    - the strided context lowers Pac-Man error @450 vs ctx4 by 5.3 px [-11.6, -0.5] (barely);
+    - the LR anneal raises responsiveness (+0.044 [+0.009, +0.080]) and wall IoU (+0.004);
+    - 128px is worse on Pac-Man error and responsiveness.
+  - **Does not survive at 10 episodes:**
+    - "10x data helps everything else". Only responsiveness improves (+0.071 [+0.014, +0.129]); Pac-Man error
+      -0.5 px [-2.7, +1.3] does not.
+    - Every ghost-count difference; all their CIs include 0.
+  - **Still to do (needs the pod volume, where the saved rollout frames `preds_all.npy` live):** pen and release
+    metrics per rollout (parked 200+ counts such as 16/30 and 17/30 -> 0/30, longest pen stay, release lags) with
+    episode CIs.
 - **STEP 2, the latent-action pre-registration:** done in 6bb6039 (G1 lag 1, ≥ 0.70 and majority + 0.30; G2 by
   direction, 0.65 / 0.85; §9; `visible_ceiling.py`; `lam_agreement.yaml`; README note on arm B).
 
