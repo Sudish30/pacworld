@@ -176,6 +176,22 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
   - **Still to do (needs the pod volume, where the saved rollout frames `preds_all.npy` live):** pen and release
     metrics per rollout (parked 200+ counts such as 16/30 and 17/30 -> 0/30, longest pen stay, release lags) with
     episode CIs.
+- **STEP 4b: game search in progress. No game chosen and nothing pre-registered or recorded.**
+  - Method (exploratory, no claimed result): random play at our frame-skip across 45 ALE games. Look for RAM bytes that
+    ramp monotonically between resets at a regular period of 15-300 steps. Then inspect the frames around the resets
+    to see whether a visible event fires with no on-screen countdown.
+  - Rejected, with the reason:
+    - Boxing byte 20, Hero byte 125, DemonAttack byte 50: period 15-16; clock digits or animation cycles.
+    - Asterix byte 7: a frame counter (+4 per step, wraps at 128) with no event.
+    - Zaxxon byte 50: resets at the player's death, a collision rather than a timer.
+    - Jamesbond byte 40 and Gopher byte 89: scrolling, beams or the gopher's own movement, all visible.
+    - Galaxian byte 96 (period ~78): fires when an alien leaves the formation to dive. The diver stays visible along a
+      fixed path, so its position is an on-screen clock.
+    - Qbert byte 112: reset gaps mostly 58-59 steps (109 of ~150) but 18 of 37. What appears at the top after a reset
+      is mostly Q*bert himself; a new ball appears only 3 times. A general game cycle, not a clean spawn timer.
+  - Next: RAM maps for games known to have a hidden, visibly triggered timer (Berzerk's Evil Otto, Venture's hall
+    monster, the pen timers of the 2600 Pac-Man), with verification that the start of the hidden interval is visible
+    and nothing on screen counts it down. Recording and training need the pod.
 - **STEP 2, the latent-action pre-registration:** done in 6bb6039 (G1 lag 1, ≥ 0.70 and majority + 0.30; G2 by
   direction, 0.65 / 0.85; §9; `visible_ceiling.py`; `lam_agreement.yaml`; README note on arm B).
 

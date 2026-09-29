@@ -1,0 +1,66 @@
+# External baseline: DIAMOND's released Atari-100k Ms. Pac-Man world model in our harness (eval/diamond_baseline.py).
+# Pre-registered in notes/handoff.md (commit 7293ef0). No retraining. Same episodes, seeds and horizons as eval.yaml.
+data:
+  folder: data/agent
+  val_episodes: configs/val_episodes.json
+  size: 64
+  context: 4
+
+record_config: configs/record.yaml    # env settings used to re-simulate the recorded episodes (frameskip 1, manual skip 4)
+
+diamond:
+  source: external/diamond/diamond-main/src    # github.com/eloialonso/diamond (MIT), main branch
+  checkpoint: external/diamond/MsPacman.pt     # huggingface.co/eloialonso/diamond atari_100k/models/MsPacman.pt
+  checkpoint_sha256_prefix: 91b213ef3f9e9091
+  num_actions: 9
+  inner_model: {img_channels: 3, num_steps_conditioning: 4, cond_channels: 256, depths: [2, 2, 2, 2], channels: [64, 64, 64, 64], attn_depths: [0, 0, 0, 0]}
+  sigma_data: 0.5
+  sigma_offset_noise: 0.3
+  sampler: {num_steps_denoising: 3, sigma_min: 0.002, sigma_max: 5.0, rho: 7, order: 1}   # DIAMOND's own world-model sampler
+  pool_last: 2                         # DIAMOND max-pools the last 2 of the 4 skipped frames
+  native_h: 210                        # DIAMOND resizes the FULL screen (score area included)
+  maze_rows: 52                        # 64px rows fully inside the maze (native rows < 172); detection is restricted to them
+
+rollout:
+  n_episodes: 10
+  seeds: 3
+  start_step: 100
+  horizon: 900
+  gated_horizons: [15, 150, 450]
+  window: 8
+
+pen:                                   # pen occupancy in DIAMOND's geometry (eval/pen_timer_analysis.py mapped to 210 native rows)
+  box_rows: [23, 30]                   # our rows 28..37 of 64 at 172 native rows -> 64 * 172/210 scaling
+  box_cols: [26, 39]
+  occ_resid: 40
+  occ_pixels: 5                        # our 6 pixels scaled by the row ratio 172/210
+  smooth: 4                            # occupied if occupied in any of the last 4 frames (2-frame pooling flickers ghosts)
+  parked_len: 200
+  spawn_px: [38.5, 31.9]               # Pac-Man respawn point, our 64px-equivalent coordinates
+  spawn_r: 2.5
+  respawn_min_missing: 5               # own respawn: Pac-Man missing >= this many steps (or jumping > jump_px), then back near spawn
+  jump_px: 6
+  min_respawns_for_pd1: 5              # P-D1 is untestable below this many own respawns in all rollouts
+
+detector:                              # configs/eval.yaml thresholds
+  residual_threshold: 20
+  fit_threshold: 18
+  min_alpha: 0.25
+  min_blob_weight: 0.8
+  pellet_present_frac: 0.5
+  wall_pinkness: 0.5
+
+gating:
+  frightened_ram: 116
+  lives_ram: 123
+  start_of_life_steps: 90
+  death_anim_steps: 12
+
+responsiveness:
+  direction_ram: 56
+  response_window: 2
+  smooth_steps: 2
+  min_move_px: 0.75
+  max_move_px: 20
+
+out_dir: eval/results/diamond
