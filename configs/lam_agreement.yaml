@@ -16,6 +16,15 @@ decision_events:                       # metrics.responsiveness_events: RAM dire
   max_step: 8                          # RAM units per step; a larger jump is a respawn or a tunnel wrap -> excluded
   min_move_px: 0.3                     # detector moves below this (64px units) count as "no move"
   folds: 2                             # best mapping fitted on one half of the val episodes, scored on the other
+  ghost_x_ram: [6, 7, 8, 9]            # orange, cyan, pink, red (for the ghost-turn code-switch lift, reported only)
+  ghost_y_ram: [12, 13, 14, 15]
+  lag: 1                               # FIXED by the pre-registration: codes[i] is compared with actions[i-1]
+
+gates:                                 # PRE-REGISTERED in notes/handoff.md (commit 6bb6039); never edit without the owner
+  g1_min: 0.70                         # G1: decision-event accuracy of the best code -> direction map
+  g1_over_majority: 0.30               #     and at least the majority-class rate + this
+  g2_events: 0.65                      # G2: direction of the resolver's code = direction of the LAM's code, at decision events
+  g2_all: 0.85                         #     and over all eligible steps
 
 detector:                              # same thresholds as configs/eval.yaml (64px)
   residual_threshold: 20

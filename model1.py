@@ -167,8 +167,10 @@ class UNet(nn.Module):
         cond = (self.action_proj(self.action_embed(actions).flatten(1))
                 + self.noise_proj(self.noise_ff(c_noise))
                 + self.ctx_proj(self.ctx_ff(c_ctx_noise)))
-        cond = self.cond_mlp(cond)
+        return self.run(x, self.cond_mlp(cond))
 
+    def run(self, x, cond):
+        """The UNet body for a ready conditioning vector (B, cond_dim); lam.py feeds it a latent-action code instead."""
         h = self.in_conv(x)
         skips = [h]
         for stages, down in zip(self.down, self.downsample):

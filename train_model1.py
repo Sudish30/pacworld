@@ -34,6 +34,9 @@ def parse_args():
     p.add_argument("--resume", help="path to model1_latest.pt to continue from")
     p.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default="online")
     p.add_argument("--run-name")
+    p.add_argument("--firewall-scramble-seed", type=int,
+                   help="label-firewall test only: replace the recorded actions by random integers before anything reads them")
+    p.add_argument("--dump", help="label-firewall test only: save every logged loss and the final weights' hash here")
     return p.parse_args()
 
 
@@ -56,6 +59,16 @@ def noise_context(ctx, ccfg, generator, device, train=True, noise_generator=None
     else:
         noise = torch.randn(ctx.shape, generator=generator).to(device)
     return ctx + sigma[:, None, None, None] * noise, sigma
+
+
+def state_sha256(model):
+    """sha256 over every parameter and buffer, in state_dict order (label-firewall test)."""
+    import hashlib
+    h = hashlib.sha256()
+    for k, v in model.state_dict().items():
+        h.update(k.encode())
+        h.update(v.detach().float().cpu().numpy().tobytes())
+    return h.hexdigest()
 
 
 class EMA:
@@ -120,7 +133,9 @@ def render_rollout(model, cache, episode_idx, cfg, device, out_path, seed):
     codec = FrameCodec(cache.get("palette"))
     frames = torch.from_numpy(codec.decode_np(cache["frames"][t0:t0 + steps]))   # the real frames being predicted, RGB
     actions = torch.from_numpy(cache["actions"][t0 - 1:t0 + steps - 1])  # actions[t] produced frames[t]
-    names = ["NOOP", "UP", "RIGHT", "LEFT", "DOWN", "UPRIGHT", "UPLEFT", "DOWNRIGHT", "DOWNLEFT"]
+    src = cfg["data"].get("action_source", "labels")
+    names = (["NOOP", "UP", "RIGHT", "LEFT", "DOWN", "UPRIGHT", "UPLEFT", "DOWNRIGHT", "DOWNLEFT"] if src == "labels"
+             else [f"code {k}" for k in range(cfg["model"]["n_actions"])])
 
     g = torch.Generator().manual_seed(seed)
     gd = torch.Generator(device=device).manual_seed(seed)
@@ -187,7 +202,11 @@ def main():
     device = pick_device(tr["device"])
     use_bf16 = tr["bf16"] and device.type == "cuda"
 
-    train, val, cache, (train_idx, val_idx) = get_datasets(cfg)
+    src = cfg["data"].get("action_source", "labels")
+    if src != "labels" and cfg.get("events"):
+        # label firewall: event windows are found from RAM, so a run without labels must sample uniformly
+        raise SystemExit(f"data.action_source {src!r} forbids an events: section (event windows are built from RAM)")
+    train, val, cache, (train_idx, val_idx) = get_datasets(cfg, args.firewall_scramble_seed)
     codec = FrameCodec(cache.get("palette")).to(device)   # the training loop's own GPU copy; train/val keep theirs on the CPU
     print(f"episodes {len(train_idx)} train / {len(val_idx)} val; windows {len(train)} train / {len(val)} val"
           + (f"; palette cache, {len(codec.palette)} colours expanded on {device}" if codec.palette is not None else ""))
@@ -249,6 +268,7 @@ def main():
         b = train.sample_mixed(tr["batch_size"], data_gen, ecfg["frac"]) if ecfg else train.sample(tr["batch_size"], data_gen)
         return tuple(x.pin_memory() for x in b) if prefetch and device.type == "cuda" else b
 
+    dump_losses = []
     loader = ThreadPoolExecutor(1) if prefetch else None
     pending = loader.submit(draw) if prefetch else None
     t_start, t_log, start_step = time.time(), time.time(), step
@@ -278,6 +298,8 @@ def main():
         opt.step()
         ema.update(model)
         step += 1
+        if args.dump:
+            dump_losses.append(loss.item())
 
         if step % tr["log_every"] == 0:
             now = time.time()
@@ -296,6 +318,8 @@ def main():
             model.train()
 
     print(f"done: {step - start_step} steps in {(time.time() - t_start) / 60:.1f} min; checkpoints in {ckpt_dir}")
+    if args.dump:
+        torch.save({"losses": dump_losses, "weights_sha256": state_sha256(model)}, args.dump)
     run.finish()
 
 

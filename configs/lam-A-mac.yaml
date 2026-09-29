@@ -1,0 +1,100 @@
+# lam-A-mac: latent action model, arm A (generic: uniform reconstruction loss).
+# Pre-registered in notes/handoff.md (commit 6bb6039); design notes/latent_actions_design.md section 3.
+# MAC SMOKE CONFIG: same model and recipe as lam-A.yaml, local 200k data; for plumbing tests only.
+data:
+  folder: data/agent                   # MAC SMOKE ONLY: the local 200k set and its 35-episode frozen split
+  cache: data/cache/frames64.npy       # MAC: .npy copy of frames64.npz (same frames) so workers can memory-map it
+  val_episodes: configs/val_episodes.json
+  size: 64
+  context: 10
+  context_offsets: [-97, -81, -65, -49, -33, -17, -4, -3, -2, -1]   # the decoder's (and the prior's) context = the world model's
+  action_source: none                  # label firewall: the LAM never sees actions; every action slot is 0
+  pac_positions: data/cache/pac64.npy   # tools/pac_positions.py (pixel detector); arm B's weight and the key map
+  lam_codes: data/cache/lam_codes_A_mac.npy   # tools/lam_codes.py; the prior trains on these
+
+lam:
+  encoder_offsets: [-3, -2, -1, 0]     # frames j-2, j-1, j and j+1 for the code of transition j -> j+1
+  encoder_widths: [64, 128, 256, 256]  # stride-2 stages: 64 -> 32 -> 16 -> 8 -> 4 px
+  encoder_hidden: 512
+  groupnorm_groups: 32
+  code_dim: 32
+  n_codes: 8                           # at most 3 bits per transition (Genie also uses 8)
+  vq_decay: 0.99                       # EMA codebook decay
+  commitment: 0.25                     # beta
+  restart_after: 2000                  # training steps a code may go unused before it is re-seeded from the batch
+  decoder:                             # model1's UNet body (widths as the world model, ~18.8M params)
+    widths: [64, 96, 192, 192]
+    blocks_per_level: 2
+    attn_levels: [2, 3]
+    heads: 4
+    cond_dim: 256
+    groupnorm_groups: 32
+    fourier_dim: 64                    # unused (no noise inputs); kept for the UNet constructor
+    dropout: 0.0
+  loss_weight:
+    enabled: false
+    lambda: 10.0                       # weight 1 + lambda near Pac-Man
+    radius_px: 4.0                     # at 64px, around his detected position in frame i-1 or frame i
+
+train:
+  steps: 30000
+  batch_size: 64
+  lr: 1.0e-4
+  lr_min: 1.0e-5                       # cosine decay to this (end every run with an LR decay)
+  warmup_steps: 500
+  weight_decay: 0.01
+  grad_clip: 1.0
+  bf16: true
+  log_every: 50
+  eval_every: 2500
+  eval_batches: 20                     # fixed val batches for recon / shuffled-code MSE and perplexity
+  prefetch: true
+  device: auto
+  checkpoint_dir: checkpoints/lam-A-mac   # lam.pt, prior.pt, keymap.json, label_free_checks.json
+  wandb_project: pacworld
+
+eval:
+  out_dir: outputs/lam-A-mac
+  swap_grid_contexts: 6                # val contexts decoded with every code, side by side
+  upscale: 4
+
+prior:                                 # p(code of the next transition | the world model's context); trains on data.lam_codes
+  widths: [64, 128, 256, 256]
+  hidden: 512
+  groupnorm_groups: 32
+  steps: 20000
+  batch_size: 256
+  lr: 3.0e-4
+  lr_min: 3.0e-5
+  warmup_steps: 500
+  weight_decay: 0.01
+  grad_clip: 1.0
+  log_every: 50
+  eval_every: 2000
+  eval_batches: 20
+
+keymap:                                # tools/lam_keymap.py: label-free key -> code map and resolver thresholds
+  min_move_px: 0.3                     # detector moves below this count as "no move"
+  max_move_px: 20                      # larger detector jumps are tunnel wraps or respawns (as configs/eval.yaml)
+  purity: 0.5                          # a code gets a direction if at least this share of its moves go that way (L1)
+  undetected_env_frac: 0.5             # a code whose transitions miss Pac-Man this often is an environment code
+  tau_legal_percentile: 1.0            # tau_legal = this percentile of p(true code) over train transitions
+  tau_env: 0.5
+  calib_transitions: 200000            # train transitions sampled for the tau_legal calibration
+  batch_size: 512
+
+checks:                                # tools/lam_checks.py: label-free checks L1-L3 and T_det on val
+  l2_min_perplexity: 4.0
+  l3_batches: 50                       # val batches for the shuffled-code test
+  bootstrap: 1000
+  tdet_min_move_px: 0.3
+  select_margin: 0.03                  # arm A wins unless B's T_det is higher by more than this
+  selection_file: checkpoints/lam_selection_mac.json   # written by tools/lam_checks.py --select
+
+detector:                              # same thresholds as configs/eval.yaml (64px)
+  residual_threshold: 20
+  fit_threshold: 18
+  min_alpha: 0.25
+  min_blob_weight: 0.8
+  pellet_present_frac: 0.5
+  wall_pinkness: 0.5

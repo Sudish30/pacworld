@@ -71,6 +71,73 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## Publication push: progress log (started 2026-09-29; the owner's 7-step plan, $100 GPU cap, stop conditions)
+- **STEP 1, security scan of the full git history (50 commits, all refs): no secrets.**
+  - No API keys, tokens, passwords, private keys or credential files were ever committed. Searched for key-shaped
+    strings, `rpa_`, `WANDB_API_KEY`, `--apiKey <value>`, `.netrc`, `config.toml` and `id_*`.
+  - The two `RUNPOD_API_KEY` hits are an environment-variable *reference* in `tools/pod_run_and_sync.sh`.
+  - `.gitignore` covers `wandb/`, `.env*`, `.hf_cache/` and `data/`.
+  - **Infrastructure details in history** (not secrets; all the pods listed are terminated):
+    - pod IPs and SSH ports: 213.173.107.231:11398, 213.173.98.97:11581, 213.173.98.90:12364, 213.173.110.204:32325,
+      213.173.110.223:23413;
+    - pod IDs: rs4lbyjavmcqdz, k3oc3lr3hdyyf3, p3pd9oyirbcmyu, rc01tj2rm162if, o9dpam9ppg0u6o;
+    - network volume `v3kyag5rhv`;
+    - the wandb entity `smulakala06-san-jose-state-university`.
+  - None grants access without the owner's SSH key or RunPod API key. **No history rewrite is needed.** Before making
+    the repo public, the owner may still choose to scrub them (a rewrite would need the owner's OK).
+  - **No key rotation is needed because of the repo.** The earlier handoff said to revoke the RunPod API key after
+    pods 2 and 3, since it was placed in their env and `~/.runpod/config.toml`. Those pods are terminated, and their
+    disks with them. Rotating that key remains a good precaution; it is the owner's call.
+- **STEP 2, the latent-action pre-registration:** done in 6bb6039 (G1 lag 1, ≥ 0.70 and majority + 0.30; G2 by
+  direction, 0.65 / 0.85; §9; `visible_ceiling.py`; `lam_agreement.yaml`; README note on arm B).
+
+## Learned controls: Stage 0 status (2026-09-29; the rules are in the pre-registration below, commit 6bb6039)
+**Blocked on the pod.** On 2026-09-29 `runpodctl user` showed a balance of **-$0.06** with no pods. The network
+volume `v3kyag5rhv` still exists. The owner is topping up. Stage 1 and all GPU training wait for the owner's go.
+
+**Done on the Mac.** Code and smoke runs only; no Stage 1 run, no GPU.
+- Code:
+  - `lam.py`, `train_lam.py`;
+  - `tools/pac_positions.py`, `lam_codes.py`, `lam_keymap.py`, `lam_checks.py`;
+  - `eval/lam_agreement.py`;
+  - `tools/firewall_test.py`, `firewall_suite_mac.sh`, `stage0_pod.sh`;
+  - the LAM configs and the four world-model configs (`m1-2M-{latent,noact}-ctx6s16{,-ft-uniform}`).
+- `model1.UNet.forward` was split into conditioning plus `run()`; outputs are bit-identical to before.
+- `dataset.apply_action_source` is the firewall: for `lam` / `none` the recorded actions are deleted at load, and the
+  end markers are rebuilt from the episode boundaries.
+- **Firewall test.** Every entry point is run twice, the second time with the recorded actions replaced by random
+  integers before anything reads them. See `logs/firewall_mac.jsonl`.
+  - Bit-identical losses, weights and val outputs: LAM arm A, LAM arm B, prior, no-action world model, latent world
+    model.
+  - The labeled world-model recipe (negative control) differs, so the test does detect a run that reads labels.
+  - One bug was found and fixed on the way: the prior's firewall case compared a missing output. It now compares its
+    val predictions.
+- **Sampling and loss weights without labels.**
+  - The four world-model configs have no `events:` section, and `train_model1.py` refuses one when the action slots
+    do not hold labels.
+  - The LAM and the prior sample uniformly.
+  - Arm B's weight map uses only pixel-detector positions.
+- **Pac-Man positions** on the local 200k cache: found in 100% of 202,088 frames, ~10 ms per frame of CPU. That is
+  about 25 min for the 2.2M cache on 16 vCPU.
+- **Context rule with codes in the action slots**: History == dataset window on 1,440 steps, and every window stays
+  inside its episode.
+- **G1 scoring controls** (35 local val episodes, 2,085 events):
+  - codes = the pixel detector's lag-1 move give G1 0.7885, the same as `visible_ceiling.py`'s 0.7880 through
+    independent code;
+  - random codes give 0.362, the majority rate being 0.357;
+  - heading-conditioned accuracy is 0.68 even for random codes, so it means little without that baseline.
+- **Known property of G2 as registered, not changed:** NONE == NONE counts as agreement. A key map in which every code
+  is NONE scores G2 = 1.0. L1 blocks that extreme case. `lam_agreement.py` also *reports* G2 restricted to steps
+  whose LAM code has a direction, and the NONE share, so partial inflation is visible.
+
+**Remaining Stage 0 steps on the pod** (`tools/stage0_pod.sh`; code synced by rsync or push first):
+1. `df` / `du`.
+2. sha256 and users of the 128px files. They are deleted by hand, and only if nothing uses them.
+3. Split and wandb gates.
+4. Pac-Man positions over `frames64_2m.npy`.
+5. The full 388-episode ceiling. **If the lag-1 pixel ceiling is below 0.76: stop and ask.**
+6. 150-step pod smoke runs of both arms, as firewall double runs.
+
 ## PRE-REGISTRATION: learned controls / latent actions (written 2026-09-29 before any LAM, code array or latent/no-action run exists)
 Design: `notes/latent_actions_design.md` (rev 2). The pipeline: a latent action model (VQ, 8 codes) is trained on frames only; its codes replace the actions for a from-scratch ctx6s16 world model; keys map to codes through a label-free key map plus a prior-gated resolver. A no-action model with the same recipe is the control. Status at commit: no pod (RunPod balance negative); Stage 0 code starts now; no GPU training until Stage 0 is done and reviewed.
 

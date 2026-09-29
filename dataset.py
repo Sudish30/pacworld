@@ -393,6 +393,11 @@ class History:
         self.frames = torch.cat([self.frames, frame[None].to(self.frames.dtype)])[-self.reach:]
         self.actions = torch.cat([self.actions, torch.zeros_like(self.actions[:1])])[-self.reach:]
 
+    def relabel_last(self, action):
+        """Overwrite the action of the transition push() just completed (latent actions: the code the LAM infers from
+        the generated frame replaces the commanded one, so context codes always agree with context frames)."""
+        self.actions[-2] = action
+
 
 def to_float(u8):
     return u8.float().div_(127.5).sub_(1.0)
@@ -402,10 +407,55 @@ def to_uint8(x):
     return ((x.clamp(-1, 1) + 1.0) * 127.5).round().to(torch.uint8)
 
 
-def get_datasets(cfg):
+ACTION_SOURCES = ("labels", "lam", "none")
+
+
+def episode_end_markers(ep_start):
+    """(N,) bool: True on each episode's last frame (the frame without an action), from the episode boundaries alone."""
+    end = np.zeros(int(ep_start[-1]), bool)
+    end[np.asarray(ep_start[1:]) - 1] = True
+    return end
+
+
+def apply_action_source(cache, d, scramble_seed=None):
+    """The label firewall. data.action_source picks what fills the action slots of every window and rollout:
+      labels  the recorded ALE actions (every model before the latent-action project)
+      lam     latent-action codes from data.lam_codes (tools/lam_codes.py), same shape, -1 on each episode's last frame
+      none    0 everywhere (the LAM itself, and the no-action world model)
+    For lam and none the recorded actions are deleted here, before any dataset object exists; the -1 end markers are
+    rebuilt from the episode boundaries, so nothing downstream depends on the label array at all.
+    scramble_seed (firewall test only): first overwrite the recorded actions with random integers. A lam/none run must
+    then produce bit-identical results, which proves no label reaches it."""
+    src = d.get("action_source", "labels")
+    if src not in ACTION_SOURCES:
+        raise SystemExit(f"data.action_source must be one of {ACTION_SOURCES}, got {src!r}")
+    if scramble_seed is not None:
+        fake = np.random.default_rng(scramble_seed).integers(0, 9, len(cache["actions"])).astype(np.int64)
+        fake[episode_end_markers(cache["ep_start"])] = -1        # plausible labels: 9 actions, -1 on each last frame
+        cache["actions"] = fake
+        print(f"FIREWALL TEST: recorded actions replaced by random integers (seed {scramble_seed})")
+    if src == "labels":
+        return cache
+    end = episode_end_markers(cache["ep_start"])
+    del cache["actions"]
+    if src == "none":
+        acts = np.zeros(len(end), np.int64)
+    else:
+        codes = np.load(d["lam_codes"])
+        if codes.shape != end.shape:
+            raise SystemExit(f"{d['lam_codes']} has shape {codes.shape}, the cache has {end.shape} frames")
+        if not np.array_equal(codes < 0, end):
+            raise SystemExit(f"{d['lam_codes']}: -1 must mark exactly each episode's last frame")
+        acts = codes.astype(np.int64)
+    acts[end] = -1
+    cache["actions"] = acts
+    return cache
+
+
+def get_datasets(cfg, scramble_seed=None):
     # data.cache_mmap: map a .npy cache instead of reading it into RAM (for caches larger than the machine's memory;
     # warm the page cache first, e.g. `cat <cache> > /dev/null`, or the first pass over the data is slow)
-    cache = load_cache(cfg, mmap=cfg["data"].get("cache_mmap", False))
+    cache = apply_action_source(load_cache(cfg, mmap=cfg["data"].get("cache_mmap", False)), cfg["data"], scramble_seed)
     train_idx, val_idx = load_split(cfg, cache["ep_seed"])
     offsets, codec = context_offsets(cfg["data"]), codec_of(cache)
     return (WindowDataset(cache, train_idx, offsets, codec), WindowDataset(cache, val_idx, offsets, codec),

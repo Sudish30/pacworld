@@ -550,24 +550,34 @@ The handoff's last reading (2026-09-22) was 81 of 100 GB used. Procedure, on the
 
 ## 11. Files and folders
 
-**New files:**
-- `lam.py` (encoder, VQ, decoder wrapper around `model1.UNet`, prior)
-- `train_lam.py --part lam|prior`
-- `tools/pac_positions.py`, `tools/lam_codes.py`, `tools/lam_keymap.py`
-- `eval/visible_ceiling.py` (exists), `eval/lam_agreement.py`, `eval/junction_test.py`, sharing `configs/lam_agreement.yaml` (exists)
-- `README.md`: a short section on the latent-action work that says arm B uses the pixel detector
-- `serve/server_lam.py`
-
-**New configs** (all hyperparameters live here):
-- `configs/lam-{A,B}.yaml`
-- `m1-2M-{latent,noact}-ctx6s16{,-ft-uniform}.yaml`
-- `eval_m1-2M-{latent,noact}-ctx6s16-ft-uniform.yaml`
-- `eval_junction.yaml`
-- `serve_lam.yaml`
+**Written in Stage 0 (2026-09-29):**
+- `lam.py`: encoder, EMA vector quantiser, decoder around `model1.UNet.run`, prior, player weight, `resolve()`.
+- `train_lam.py --part lam|prior`: wandb logging, code-swap grids, `--firewall-scramble-seed` / `--dump` for the
+  firewall test.
+- `tools/pac_positions.py` (pixel detector over the cache), `tools/lam_codes.py` (codes array),
+  `tools/lam_keymap.py` (label-free map and τ calibration), `tools/lam_checks.py` (L1-L3, T_det, `--select`).
+- `eval/visible_ceiling.py` (committed with the pre-registration) and `eval/lam_agreement.py` (G1, G2, reported
+  numbers). Both read `configs/lam_agreement.yaml`, which holds the pre-registered bars.
+- `tools/firewall_test.py` (one double run), `tools/firewall_suite_mac.sh` (all entry points plus a labeled
+  negative control that must fail), `tools/stage0_pod.sh` (the pod half of Stage 0; deletes nothing).
+- Configs:
+  - `configs/lam-{A,B}.yaml`, and `lam-{A,B}-mac.yaml` for the Mac smoke;
+  - `configs/m1-2M-{latent,noact}-ctx6s16{,-ft-uniform}.yaml`. The latent configs point at
+    `lam_codes_ARM.npy` until the arm is chosen;
+  - `configs/m1-{noact,latent,labels}-mac.yaml` for smoke and firewall tests.
+- `README.md`: the latent-action section, including that arm B uses the pixel detector.
 
 **Edited, additive only:**
-- `dataset.py`: `data.action_source` in `get_datasets`; `History.relabel_last`.
-- `eval/eval_rollouts.py`: `rollout.action_source`, default `recorded`, so existing configs are unchanged.
+- `model1.py`: `UNet.forward` split into the conditioning step and `run()` (outputs verified bit-identical).
+- `dataset.py`: `apply_action_source` (the firewall; labels deleted for `lam` / `none`) and `History.relabel_last`.
+- `train_model1.py`: refuses `events:` without labels; `--firewall-scramble-seed` / `--dump`; codes named in the
+  rollout GIF.
+
+**Still to write before Stage 2 / 3:**
+- `eval/junction_test.py` and `configs/eval_junction.yaml`, committed before any junction run;
+- the `rollout.action_source` modes in `eval/eval_rollouts.py`;
+- `eval_m1-2M-{latent,noact}-ctx6s16-ft-uniform.yaml`;
+- `serve/server_lam.py` and `configs/serve_lam.yaml`.
 
 **Not touched:** `serve/server.py`, `configs/serve.yaml`, the running demo, every existing checkpoint.
 

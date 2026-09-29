@@ -1,0 +1,63 @@
+# m1-noact-mac: MAC SMOKE / FIREWALL-TEST CONFIG ONLY. The m1-2M-noact-ctx6s16 recipe on the local 200k set, tiny batch and evals.
+
+data:
+  folder: data/agent
+  cache: data/cache/frames64.npy       # .npy copy of frames64.npz
+  val_episodes: configs/val_episodes.json
+  size: 64
+  context: 10
+  context_offsets: [-97, -81, -65, -49, -33, -17, -4, -3, -2, -1]   # frames before the episode start clamp to its first frame
+  action_source: none                  # every action slot is 0: no action input (labels are deleted at load)
+
+model:
+  widths: [64, 96, 192, 192]           # at 64 / 32 / 16 / 8 px (~18.8M params)
+  blocks_per_level: 2                  # encoder blocks per level (decoder uses one more)
+  attn_levels: [2, 3]                  # self-attention after every block at 16 and 8 px
+  heads: 4
+  cond_dim: 256
+  action_embed_dim: 32
+  n_actions: 1                         # one constant embedding = no action input
+  groupnorm_groups: 32
+  fourier_dim: 64                      # Fourier features for the noise-level embeddings
+  dropout: 0.0
+
+diffusion:                             # Karras et al. 2022 (EDM), DIAMOND Atari values
+  sigma_data: 0.5
+  p_mean: -0.4                         # ln(sigma) ~ N(p_mean, p_std) during training
+  p_std: 1.2
+  sigma_min: 0.002
+  sigma_max: 20.0
+  rho: 7
+  rollout_steps: 3                     # Euler steps for autoregressive rollouts
+  grid_steps: 2
+
+ctx_noise:                             # GameNGen-style context noise augmentation
+  enabled: true
+  prob: 0.5                            # fraction of training samples whose context is noised
+  sigma_min: 0.002                     # log-uniform range of the context noise level
+  sigma_max: 0.5
+  infer_sigma: 0.0                     # context noise level used at inference
+
+train:
+  steps: 100000
+  batch_size: 8
+  lr: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 100                    # linear warmup, then constant
+  grad_clip: 1.0
+  ema_decay: 0.999
+  bf16: true
+  log_every: 50
+  eval_every: 5000
+  eval_batches: 2
+  device: auto
+  checkpoint_dir: checkpoints/m1-noact-mac
+  wandb_project: pacworld
+
+eval:
+  out_dir: outputs/m1-noact-mac
+  grid_samples: 2
+  rollout_seconds: 1
+  rollout_start: 100
+  fps: 15
+  upscale: 4
