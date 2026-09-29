@@ -71,6 +71,62 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STOPPED 2026-09-29: a pre-registered gate failed (STEP 5, P-D1), and the RunPod balance is -$0.06
+**Spend so far: $0 GPU.** No pod was started. Everything below ran on the Mac CPU.
+
+**Why stopped.** Two stop conditions hold:
+1. **P-D1 FAILED.** DIAMOND's released model parks ghosts 200+ steps in **0/30** rollouts; ≥ 10/30 was predicted.
+   - Its own respawns total 6, above the minimum of 5, so the test counts as registered.
+   - The pen metric's validity gate passed (V-D3: ground-truth median 94, 0/30 parked).
+2. The balance is **-$0.06**, below the $25 floor. Every pod step is blocked: STEP 3 Stages 0 (pod part) to 4, the 4a
+   GPU sweep, 4b, and STEP 6's pen metrics.
+
+**What the P-D1 failure is made of** (reported, not re-scored). DIAMOND loses the ghosts entirely, so the pen never
+refills:
+- ghost count / its own ground truth: 0.976 [0.954, 0.995] @15, 0.301 [0.257, 0.365] @150,
+  **0.077 [0.054, 0.097] @450**. For comparison, Model 1 0.411 [0.250, 0.609] and ft-uniform
+  0.581 [0.297, 0.865] @450;
+- longest pen stay median 16 steps (ground truth 94);
+- frames at steps 150-300 show the maze and Pac-Man intact with no ghosts.
+
+My reading: P-D1 assumed ghosts survive long enough to be penned. That is a gap in the criterion, which I am reporting
+and not fixing. The result is **not** evidence that DIAMOND times the pen correctly, and it is not support for the
+rule either. The timer rule's evidence stays with our own ablation (ctx4 / ctx8 / ctx6s16) and the pending synthetic
+test (STEP 4a).
+
+**DIAMOND against our models** (episode-bootstrap 95% CIs, 10 episodes x 3 seeds, each model against its own ground
+truth; 900 steps is 60x DIAMOND's 15-step design horizon and it was trained on about 1/20 of our data, so this ranks
+long-horizon coherence, not designs):
+- Pac-Man error @450 (our 64px-equivalent): DIAMOND 25.309 [19.074, 31.229], Model 1 19.479 [13.265, 25.420],
+  ft-uniform 14.574 [10.358, 19.290].
+  - DIAMOND's mean over rollouts is 28.18; the per-episode mean differs because some rollouts lose Pac-Man (NaN).
+- Responsiveness @450: 0.183 [0.133, 0.238] vs 0.303 [0.228, 0.384] / 0.429 [0.395, 0.464].
+  At @15: 0.619 [0.541, 0.694] vs 0.799 [0.703, 0.893].
+- Pellet IoU @450: 0.781 [0.755, 0.814] vs 0.845 [0.825, 0.864].
+- Wall IoU / own ceiling @450: 1.000 [0.995, 1.004] vs 0.973 [0.968, 0.978]. DIAMOND keeps the
+  walls perfectly.
+
+**Everything done in this push, with commits:**
+- STEP 1, security scan: no secrets (details below).
+- STEP 2, latent-action pre-registration: 6bb6039.
+- STEP 3 Stage 0 (Mac half): 7ef9698. The firewall suite passes, including the negative control.
+- STEP 4a:
+  - pre-registration ab0a961;
+  - game, ideal observer, D0/I0 for 23 cells and Amendment 1 (made before any model result): 1cd63a3;
+  - trainer, sweep and verdict: a3ab78a;
+  - the GPU sweep has not run.
+- STEP 4b: game search only; no candidate passed (see below).
+- STEP 5: pre-registration 7293ef0, harness 345c890, result above.
+- STEP 6: the per-step metrics with CIs (below). Pen metrics are pending the pod.
+- STEP 7: not started, because most results it needs do not exist yet.
+
+**Needs the owner:**
+1. Top up RunPod ($25 or more).
+2. Decide how to treat P-D1. The options, in my view: keep it as a plain FAIL in the paper with the ghost-collapse
+   explanation; or register a *new*, separate test (for example parking conditional on ghosts surviving), clearly
+   marked as post hoc.
+3. Say whether to continue with STEP 3 (`tools/stage0_pod.sh` is ready) once the balance allows.
+
 ## Publication push: progress log (started 2026-09-29; the owner's 7-step plan, $100 GPU cap, stop conditions)
 - **STEP 1, security scan of the full git history (50 commits, all refs): no secrets.**
   - No API keys, tokens, passwords, private keys or credential files were ever committed. Searched for key-shaped
@@ -138,60 +194,48 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
     observer at S10 N=24 (0.891) and N=80 (0.594). It is now min(0.90, ideal − 0.10). This was made before any model
     result exists.
 - **STEP 6, part 1 (Mac, `eval/bootstrap_ci.py`, `configs/stats.yaml`): episode-bootstrap 95% CIs** for every
-  metric in `per_step.csv`, at horizon 450, with the original numbers alongside.
+  metric in `per_step.csv` at horizon 450, with the original numbers alongside.
   - Method: 10,000 resamples of the 10 held-out episodes, each keeping its 3 sampler seeds. Paired differences use the
     same episodes for both runs. Full output, including horizons 15 and 150: `eval/results/stats/bootstrap_ci.json`.
-  - Every original number reproduces as the mean over episodes, except two small differences where some rollouts
-    have NaN Pac-Man error: ft-events 18.17 vs 18.24, and 128px 45.48 vs 43.78 at 128px scale.
+  - `*_rel` is a ratio to the run's own ground truth, which makes DIAMOND comparable.
+  - **Correction:** the first version of this table compared the 128px run's Pac-Man error in 128px units with 64px
+    units (+30.9 px). With both in 64px-equivalent units the difference is **+8.2 [+1.9, +13.9]**.
+    `configs/stats.yaml: pac_err_scale` now converts.
 
-| run | wall_iou@450 | pellet_iou@450 | pac_err@450 | responsiveness@450 | ghost_count@450 |
-|---|---|---|---|---|---|
-| model1 | 0.958 [0.957, 0.960] (orig 0.958) | 0.839 [0.821, 0.853] (orig 0.839) | 19.479 [13.265, 25.420] (orig 19.479) | 0.303 [0.228, 0.384] (orig 0.303) | 1.646 [1.000, 2.438] (orig 1.646) |
-| ctx4 | 0.959 [0.955, 0.962] (orig 0.959) | 0.848 [0.828, 0.872] (orig 0.848) | 18.989 [13.220, 24.811] (orig 18.989) | 0.374 [0.283, 0.468] (orig 0.374) | 2.000 [1.250, 2.750] (orig 2.000) |
-| ctx8 | 0.960 [0.958, 0.962] (orig 0.960) | 0.829 [0.808, 0.852] (orig 0.829) | 19.063 [12.568, 25.163] (orig 19.063) | 0.382 [0.259, 0.511] (orig 0.382) | 1.469 [0.938, 2.000] (orig 1.469) |
-| ctx6s16 | 0.952 [0.949, 0.956] (orig 0.952) | 0.843 [0.816, 0.869] (orig 0.843) | 13.676 [9.076, 18.574] (orig 13.676) | 0.385 [0.361, 0.413] (orig 0.385) | 2.031 [1.010, 2.833] (orig 2.031) |
-| ft-uniform | 0.955 [0.953, 0.958] (orig 0.955) | 0.845 [0.825, 0.864] (orig 0.845) | 14.574 [10.358, 19.290] (orig 14.574) | 0.429 [0.395, 0.464] (orig 0.429) | 2.323 [1.188, 3.458] (orig 2.323) |
-| ft-events | 0.952 [0.949, 0.956] (orig 0.952) | 0.845 [0.833, 0.861] (orig 0.845) | 18.171 [14.940, 21.349] (orig 18.236) | 0.438 [0.408, 0.467] (orig 0.438) | 2.615 [1.750, 3.219] (orig 2.615) |
-| r148 | 0.934 [0.930, 0.937] (orig 0.934) | 0.827 [0.791, 0.862] (orig 0.827) | 14.515 [11.709, 17.517] (orig 14.515) | 0.411 [0.362, 0.457] (orig 0.411) | 2.073 [1.219, 2.750] (orig 2.073) |
-| 3m-r148-ft-fright | 0.928 [0.925, 0.931] (orig 0.928) | 0.828 [0.799, 0.854] (orig 0.828) | 15.633 [11.209, 20.315] (orig 15.633) | 0.430 [0.382, 0.479] (orig 0.430) | 2.688 [2.010, 3.406] (orig 2.688) |
-| 3m-ctx6s16-ft-fright | 0.958 [0.956, 0.961] (orig 0.958) | 0.837 [0.823, 0.853] (orig 0.837) | 17.831 [13.682, 22.189] (orig 17.964) | 0.394 [0.364, 0.422] (orig 0.394) | 2.146 [1.083, 3.354] (orig 2.146) |
-| 128-ft-uniform | 0.970 [0.964, 0.976] (orig 0.970) | 0.831 [0.799, 0.865] (orig 0.831) | 45.484 [30.719, 59.520] (orig 43.781) | 0.258 [0.230, 0.286] (orig 0.258) | 2.042 [1.167, 2.917] (orig 2.042) |
+| run | wall_iou@450 | wall_iou_rel@450 | pellet_iou@450 | pac_err@450 | responsiveness@450 | ghost_count@450 | ghost_count_rel@450 |
+|---|---|---|---|---|---|---|---|
+| model1 | 0.958 [0.957, 0.960] (orig 0.958) | 0.976 [0.971, 0.981] (orig 0.976) | 0.839 [0.821, 0.853] (orig 0.839) | 19.479 [13.265, 25.420] (orig 19.479) | 0.303 [0.228, 0.384] (orig 0.303) | 1.646 [1.000, 2.438] (orig 1.646) | 0.411 [0.250, 0.609] (orig 0.411) |
+| ctx4 | 0.959 [0.955, 0.962] (orig 0.959) | 0.976 [0.971, 0.982] (orig 0.976) | 0.848 [0.828, 0.872] (orig 0.848) | 18.989 [13.220, 24.811] (orig 18.989) | 0.374 [0.283, 0.468] (orig 0.374) | 2.000 [1.250, 2.750] (orig 2.000) | 0.500 [0.312, 0.688] (orig 0.500) |
+| ctx8 | 0.960 [0.958, 0.962] (orig 0.960) | 0.977 [0.973, 0.982] (orig 0.977) | 0.829 [0.808, 0.852] (orig 0.829) | 19.063 [12.568, 25.163] (orig 19.063) | 0.382 [0.259, 0.511] (orig 0.382) | 1.469 [0.938, 2.000] (orig 1.469) | 0.367 [0.234, 0.500] (orig 0.367) |
+| ctx6s16 | 0.952 [0.949, 0.956] (orig 0.952) | 0.970 [0.965, 0.975] (orig 0.970) | 0.843 [0.816, 0.869] (orig 0.843) | 13.676 [9.076, 18.574] (orig 13.676) | 0.385 [0.361, 0.413] (orig 0.385) | 2.031 [1.010, 2.833] (orig 2.031) | 0.508 [0.253, 0.708] (orig 0.508) |
+| ft-uniform | 0.955 [0.953, 0.958] (orig 0.955) | 0.973 [0.968, 0.978] (orig 0.973) | 0.845 [0.825, 0.864] (orig 0.845) | 14.574 [10.358, 19.290] (orig 14.574) | 0.429 [0.395, 0.464] (orig 0.429) | 2.323 [1.188, 3.458] (orig 2.323) | 0.581 [0.297, 0.865] (orig 0.581) |
+| ft-events | 0.952 [0.949, 0.956] (orig 0.952) | 0.970 [0.967, 0.974] (orig 0.970) | 0.845 [0.833, 0.861] (orig 0.845) | 18.171 [14.940, 21.349] (orig 18.236) | 0.438 [0.408, 0.467] (orig 0.438) | 2.615 [1.750, 3.219] (orig 2.615) | 0.654 [0.437, 0.805] (orig 0.654) |
+| r148 | 0.934 [0.930, 0.937] (orig 0.934) | 0.951 [0.944, 0.957] (orig 0.951) | 0.827 [0.791, 0.862] (orig 0.827) | 14.515 [11.709, 17.517] (orig 14.515) | 0.411 [0.362, 0.457] (orig 0.411) | 2.073 [1.219, 2.750] (orig 2.073) | 0.518 [0.305, 0.688] (orig 0.518) |
+| 3m-r148-ft-fright | 0.928 [0.925, 0.931] (orig 0.928) | 0.946 [0.941, 0.950] (orig 0.946) | 0.828 [0.799, 0.854] (orig 0.828) | 15.633 [11.209, 20.315] (orig 15.633) | 0.430 [0.382, 0.479] (orig 0.430) | 2.688 [2.010, 3.406] (orig 2.688) | 0.672 [0.503, 0.852] (orig 0.672) |
+| 3m-ctx6s16-ft-fright | 0.958 [0.956, 0.961] (orig 0.958) | 0.976 [0.971, 0.981] (orig 0.976) | 0.837 [0.823, 0.853] (orig 0.837) | 17.831 [13.682, 22.189] (orig 17.964) | 0.394 [0.364, 0.422] (orig 0.394) | 2.146 [1.083, 3.354] (orig 2.146) | 0.536 [0.271, 0.839] (orig 0.536) |
+| 128-ft-uniform | 0.970 [0.964, 0.976] (orig 0.970) | 1.002 [0.992, 1.011] (orig 1.002) | 0.831 [0.799, 0.865] (orig 0.831) | 22.742 [15.360, 29.760] (orig 21.891) | 0.258 [0.230, 0.286] (orig 0.258) | 2.042 [1.167, 2.917] (orig 2.042) | 0.510 [0.292, 0.729] (orig 0.510) |
+| diamond | 0.983 [0.982, 0.985] (orig 0.983) | 1.000 [0.995, 1.004] (orig 1.000) | 0.781 [0.755, 0.814] (orig 0.781) | 25.309 [19.074, 31.229] (orig 28.177) | 0.183 [0.133, 0.238] (orig 0.183) | 0.302 [0.208, 0.385] (orig 0.302) | 0.077 [0.054, 0.097] (orig 0.077) |
 
-| paired difference | wall_iou@450 | pellet_iou@450 | pac_err@450 | responsiveness@450 | ghost_count@450 |
-|---|---|---|---|---|---|
-| ctx4 - model1 | +0.000 [-0.004, +0.004] | +0.009 [-0.004, +0.027] | -0.489 [-2.659, +1.314] | +0.071 [+0.014, +0.129] * | +0.354 [-0.604, +1.500] |
-| ctx8 - ctx4 | +0.001 [-0.002, +0.004] | -0.018 [-0.027, -0.010] * | +0.074 [-2.420, +2.602] | +0.009 [-0.074, +0.117] | -0.531 [-1.094, +0.500] |
-| ctx6s16 - ctx4 | -0.007 [-0.011, -0.002] * | -0.005 [-0.030, +0.023] | -5.314 [-11.640, -0.541] * | +0.011 [-0.081, +0.098] | +0.031 [-0.406, +0.500] |
-| ft-uniform - ctx6s16 | +0.004 [+0.002, +0.005] * | +0.002 [-0.019, +0.022] | +0.898 [-2.526, +4.748] | +0.044 [+0.009, +0.080] * | +0.292 [-0.354, +0.771] |
-| 128-ft-uniform - ft-uniform | +0.015 [+0.009, +0.020] * | -0.014 [-0.043, +0.014] | +30.910 [+17.880, +42.707] * | -0.172 [-0.216, -0.125] * | -0.281 [-0.938, +0.115] |
+| paired difference | wall_iou@450 | wall_iou_rel@450 | pellet_iou@450 | pac_err@450 | responsiveness@450 | ghost_count@450 | ghost_count_rel@450 |
+|---|---|---|---|---|---|---|---|
+| ctx4 - model1 | +0.000 [-0.004, +0.004] | +0.000 [-0.004, +0.004] | +0.009 [-0.004, +0.027] | -0.489 [-2.659, +1.314] | +0.071 [+0.014, +0.129] * | +0.354 [-0.604, +1.500] | +0.089 [-0.151, +0.375] |
+| ctx8 - ctx4 | +0.001 [-0.002, +0.004] | +0.001 [-0.002, +0.004] | -0.018 [-0.027, -0.010] * | +0.074 [-2.420, +2.602] | +0.009 [-0.074, +0.117] | -0.531 [-1.094, +0.500] | -0.133 [-0.273, +0.125] |
+| ctx6s16 - ctx4 | -0.007 [-0.011, -0.002] * | -0.007 [-0.011, -0.002] * | -0.005 [-0.030, +0.023] | -5.314 [-11.640, -0.541] * | +0.011 [-0.081, +0.098] | +0.031 [-0.406, +0.500] | +0.008 [-0.102, +0.125] |
+| ft-uniform - ctx6s16 | +0.004 [+0.002, +0.005] * | +0.004 [+0.002, +0.005] * | +0.002 [-0.019, +0.022] | +0.898 [-2.526, +4.748] | +0.044 [+0.009, +0.080] * | +0.292 [-0.354, +0.771] | +0.073 [-0.089, +0.193] |
+| 128-ft-uniform - ft-uniform | +0.015 [+0.009, +0.020] * | +0.028 [+0.022, +0.035] * | -0.014 [-0.043, +0.014] | +8.168 [+1.885, +13.882] * | -0.172 [-0.216, -0.125] * | -0.281 [-0.938, +0.115] | -0.070 [-0.234, +0.029] |
+| diamond - model1 | +0.025 [+0.023, +0.027] * | +0.024 [+0.021, +0.026] * | -0.058 [-0.085, -0.027] * | +5.830 [+1.207, +11.557] * | -0.120 [-0.216, -0.024] * | -1.344 [-2.146, -0.708] * | -0.334 [-0.531, -0.177] * |
+| diamond - ft-uniform | +0.028 [+0.025, +0.031] * | +0.027 [+0.023, +0.030] * | -0.064 [-0.094, -0.031] * | +10.734 [+4.482, +17.441] * | -0.246 [-0.305, -0.185] * | -2.021 [-3.229, -0.812] * | -0.503 [-0.807, -0.200] * |
 
   - **Survives:**
     - the strided context lowers Pac-Man error @450 vs ctx4 by 5.3 px [-11.6, -0.5] (barely);
     - the LR anneal raises responsiveness (+0.044 [+0.009, +0.080]) and wall IoU (+0.004);
-    - 128px is worse on Pac-Man error and responsiveness.
+    - 128px is worse on Pac-Man error (+8.2 px) and responsiveness (-0.17).
   - **Does not survive at 10 episodes:**
     - "10x data helps everything else". Only responsiveness improves (+0.071 [+0.014, +0.129]); Pac-Man error
       -0.5 px [-2.7, +1.3] does not.
-    - Every ghost-count difference; all their CIs include 0.
+    - Every ghost-count difference between our models; all their CIs include 0.
   - **Still to do (needs the pod volume, where the saved rollout frames `preds_all.npy` live):** pen and release
-    metrics per rollout (parked 200+ counts such as 16/30 and 17/30 -> 0/30, longest pen stay, release lags) with
-    episode CIs.
-- **STEP 4b: game search in progress. No game chosen and nothing pre-registered or recorded.**
-  - Method (exploratory, no claimed result): random play at our frame-skip across 45 ALE games. Look for RAM bytes that
-    ramp monotonically between resets at a regular period of 15-300 steps. Then inspect the frames around the resets
-    to see whether a visible event fires with no on-screen countdown.
-  - Rejected, with the reason:
-    - Boxing byte 20, Hero byte 125, DemonAttack byte 50: period 15-16; clock digits or animation cycles.
-    - Asterix byte 7: a frame counter (+4 per step, wraps at 128) with no event.
-    - Zaxxon byte 50: resets at the player's death, a collision rather than a timer.
-    - Jamesbond byte 40 and Gopher byte 89: scrolling, beams or the gopher's own movement, all visible.
-    - Galaxian byte 96 (period ~78): fires when an alien leaves the formation to dive. The diver stays visible along a
-      fixed path, so its position is an on-screen clock.
-    - Qbert byte 112: reset gaps mostly 58-59 steps (109 of ~150) but 18 of 37. What appears at the top after a reset
-      is mostly Q*bert himself; a new ball appears only 3 times. A general game cycle, not a clean spawn timer.
-  - Next: RAM maps for games known to have a hidden, visibly triggered timer (Berzerk's Evil Otto, Venture's hall
-    monster, the pen timers of the 2600 Pac-Man), with verification that the start of the hidden interval is visible
-    and nothing on screen counts it down. Recording and training need the pod.
+    metrics per rollout with episode CIs (the 16/30 and 17/30 -> 0/30 parking claims, longest pen stay, release lags).
 - **STEP 2, the latent-action pre-registration:** done in 6bb6039 (G1 lag 1, ≥ 0.70 and majority + 0.30; G2 by
   direction, 0.65 / 0.85; §9; `visible_ceiling.py`; `lam_agreement.yaml`; README note on arm B).
 

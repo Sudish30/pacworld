@@ -4,7 +4,7 @@ bootstrap: 10000
 seed: 0
 window: 8                        # instantaneous metrics = mean over the last `window` gated steps up to the horizon (as eval_rollouts)
 horizons: [15, 150, 450]
-metrics: [wall_iou, pellet_iou, pac_err, responsiveness, ghost_count]
+metrics: [wall_iou, wall_iou_rel, pellet_iou, pac_err, responsiveness, ghost_count, ghost_count_rel]   # *_rel = ratio to the run's own ground truth
 runs:                            # name -> per_step.csv written by eval/eval_rollouts.py (same 10 episodes x 3 seeds for all)
   model1: eval/results/model1/per_step.csv
   ctx4: eval/results/m1-2M-ctx4/model1/per_step.csv
@@ -16,10 +16,15 @@ runs:                            # name -> per_step.csv written by eval/eval_rol
   3m-r148-ft-fright: eval/results/m1-3M-r148-ft-fright/model1/per_step.csv
   3m-ctx6s16-ft-fright: eval/results/m1-3M-ctx6s16-ft-fright/model1/per_step.csv
   128-ft-uniform: eval/results/m1-2M-128-ctx6s16-ft-uniform/model1/per_step.csv
+  diamond: eval/results/diamond/per_step.csv   # DIAMOND's released Atari-100k model (eval/diamond_baseline.py); pac_err in our 64px-equivalent units
+pac_err_scale:                   # multiply pac_err by this to reach 64px-equivalent units (the 128px run records 128px units)
+  128-ft-uniform: 0.5
 pairs:                           # paired differences (b - a) on the same episodes: the claims the README makes
   - [model1, ctx4]               # 10x data
   - [ctx4, ctx8]                 # longer consecutive context
   - [ctx4, ctx6s16]              # strided context (one variable vs ctx4: the offsets)
   - [ctx6s16, ft-uniform]        # LR anneal
   - [ft-uniform, 128-ft-uniform] # 128px
+  - [model1, diamond]            # external baseline vs our 4-frame model (different data, preprocessing, training)
+  - [ft-uniform, diamond]        # external baseline vs our served model
 out: eval/results/stats

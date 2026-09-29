@@ -19,6 +19,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# ratios to the same run's own ground truth: comparable across frame geometries (DIAMOND's full-screen frames)
+DERIVED = {"wall_iou_rel": ("wall_iou", "wall_iou_gt"), "ghost_count_rel": ("ghost_count", "ghost_count_gt")}
+
+
 def load(path):
     """per_step.csv -> dict of numpy columns (bools and numbers parsed; empty cells -> NaN)."""
     with open(path) as f:
@@ -44,6 +48,12 @@ def per_rollout(df, metric, h, w):
         if metric == "responsiveness":
             ev = df["resp_event"][m & df["gt"]].sum()
             out[(int(key[0]), int(key[1]))] = df["resp_hit"][m].sum() / ev if ev > 0 else np.nan
+        elif metric in DERIVED:
+            num, den = DERIVED[metric]
+            sel = m & (df["step"] > h - w) & df["gt"]
+            v = df[num][sel] / df[den][sel]
+            v = v[np.isfinite(v)]
+            out[(int(key[0]), int(key[1]))] = v.mean() if len(v) else np.nan
         else:
             v = df[metric][m & (df["step"] > h - w) & df["gt"]]
             v = v[~np.isnan(v)]
@@ -76,6 +86,9 @@ def main():
     c = yaml.safe_load(open(ROOT / a.config))
     B, w = c["bootstrap"], c["window"]
     dfs = {name: load(ROOT / f) for name, f in c["runs"].items() if (ROOT / f).exists()}
+    for name, k in (c.get("pac_err_scale") or {}).items():
+        if name in dfs:
+            dfs[name]["pac_err"] = dfs[name]["pac_err"] * k        # 64px-equivalent units for every run
     missing = [n for n in c["runs"] if n not in dfs]
     out = {"missing_runs": missing, "runs": {}, "pairs": {}}
     per_ep = {}
