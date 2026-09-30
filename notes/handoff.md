@@ -98,6 +98,18 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STEP 4a pilot (2026-09-30): PASSES, so the other 21 cells run
+- Two registered cells, trained and scored exactly as registered, 15k steps each at about 7.2 it/s on the RTX 2000
+  Ada, both in parallel:
+  - **C10 N=8**: on-time 1.000 (ideal 1.000; R1 bar 0.80) -> **R1 pass**.
+  - **S10 N=33**: on-time 0.867 (ideal 0.861; bar 0.761) -> **R1 pass**. The model's early-release fraction is 0.133
+    against the observer's 0.132.
+  - D0 passes in both.
+- Frames around the release (S10 N=33, 4 starts, `logs/S10-N33_release_frames.png`): the ghost leaves the pen exactly
+  at step N as a crisp sprite at the release point, so the detector reads real releases, not blur. A few frames of
+  smear follow the release as the ghost starts to roam; this does not affect the lag measurement.
+- Spend decision per the pre-spend rule: at least one cell passes R1 -> run the remaining 21 cells (`tools/timer_sweep.sh`).
+
 ## STEP 6, part 2 (2026-09-30): pen-timer metrics with episode-bootstrap CIs (`eval/pen_bootstrap.py`, `configs/pen_stats.yaml`)
 - **Method.**
   - Per rollout: the longest run with the pen occupied, by `pen_timer_analysis.py`'s own occupancy test, on each
