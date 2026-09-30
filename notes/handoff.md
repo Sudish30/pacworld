@@ -111,6 +111,17 @@ then Stage 1. The treatment of DIAMOND's P-D1 remains the owner's decision.
   weights sha256 and val codes are identical with the recorded actions scrambled (`logs/firewall_pod.jsonl`).
 - LAM speed on this GPU: 8.3-8.4 it/s at batch 64.
 - `lam-A` training started 07:34 UTC.
+- **Arm A (generic): complete codebook collapse; it FAILS L1, L2 and L3** (label-free; labels never read).
+  - Evals at 2.5k, 5k, 7.5k and 10k steps: code gain x1.000 every time. Perplexity 1.70 at 2.5k, then 1.00 from 5k
+    on.
+  - 85 dead-code restarts over 30k steps; each re-collapses. 30,000 steps in 60.7 min.
+  - Codes: all 2,203,685 transitions got code 1.
+  - L1: no direction has a code. L2: perplexity 1.00. L3: ratio 1.0000, CI [1.0000, 1.0000]. T_det 0.000 over 40,503
+    detector-seen turns.
+  - A Mac check of the gradient path found no plumbing bug: gradients reach the code projection, and codes change the
+    decoder output. This is the pre-named "decoder ignores the code" failure: at 64px, Pac-Man's move is too small a
+    part of the unweighted MSE to reward using the code.
+- `lam-B` (player-weighted) started 08:46 UTC.
 
 ## STOPPED 2026-09-29: a pre-registered gate failed (STEP 5, P-D1), and the RunPod balance is -$0.06
 **Spend so far: $0 GPU.** No pod was started. Everything below ran on the Mac CPU.
