@@ -131,6 +131,12 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
   at step N as a crisp sprite at the release point, so the detector reads real releases, not blur. A few frames of
   smear follow the release as the ghost starts to roam; this does not affect the lag measurement.
 - Spend decision per the pre-spend rule: at least one cell passes R1 -> run the remaining 21 cells (`tools/timer_sweep.sh`).
+- **Parallelism check (owner's request, 2026-09-30 23:35 UTC, RTX 2000 Ada).**
+  - GPU utilization 83-100% (mean about 90%) with 3 cells running. Memory 3.8 / 16 GB. CPU load 5.8 on 48 cores.
+  - Total throughput has already plateaued: 2 cells ran at 2 x 7.4 = 14.8 it/s, 3 cells run at 3 x 4.9 = 14.7 it/s.
+    The GPU is the bottleneck, so more parallel cells would not shorten the sweep. It stays at 3.
+  - The 4090 pod is committed to part b, and this card is the cheapest place to finish the remaining cells.
+  - Results do not depend on parallelism: every cell keeps its seed, config and scoring and runs independently.
 
 ## STEP 6, part 2 (2026-09-30): pen-timer metrics with episode-bootstrap CIs (`eval/pen_bootstrap.py`, `configs/pen_stats.yaml`)
 - **Method.**
