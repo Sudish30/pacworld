@@ -98,6 +98,35 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STEP 4a pre-spend check (2026-09-30, written before any GPU spend; the criteria stay those of ab0a961 + Amendment 1)
+**(a) Most likely way it fails.**
+- The small models learn no timing at all within 15k steps, even inside their reach. The release is a one-frame
+  event every N+20 frames, and a denoising loss barely rewards getting its timing right; pacworld's frightened timer
+  failed that way.
+- Every in-reach cell would then fail R1, and the sweep says nothing about reach.
+- Second risk: releases rendered as blur that the detector does not read as a ghost, inflating "parked".
+
+**(b) Cheapest test, run first.** Two of the 23 registered cells, trained and scored exactly as registered:
+- **C10 N=8**: exact in reach; the easiest cell; ideal on-time 1.000.
+- **S10 N=33**: the strided layout at a far offset; ideal 0.861.
+
+Also inspect a sample of their rollout frames around the release.
+- **Continue to the other 21 cells only if at least one of the two passes R1**, with the bar min(0.80, ideal − 0.10).
+- If neither does: stop, report, and do not run the rest.
+
+This spend rule does not change any pre-registered criterion or the verdict logic.
+
+**(c) Differences from the method it is based on** (pacworld's DIAMOND-style recipe) and the risk each creates:
+- 16x16 synthetic frames instead of 64x64 Atari frames: timing in a simpler visual world may be easier or harder to
+  learn, so the result says something about the mechanism, not a number for Atari.
+- No actions (unconditional model): it tests timing only, not action conditioning.
+- A small UNet (widths [64, 128], about 4.4M params) instead of [64, 96, 192, 192] (18.8M): capacity limits could
+  cause failures that reach does not explain. That is why the pilot checks in-reach learning first.
+- 15k steps with cosine decay instead of 100k constant + 15k anneal: a different schedule, though both end with an LR
+  decay (the lesson from ft-uniform). Under-training is caught by the pilot.
+- Batch 128 instead of 64: more samples per step, no known risk.
+- An RTX PRO 4500 instead of a 4090: speed only.
+
 ## STOPPED 2026-09-30: Stage 1 pre-registered stop, no LAM arm passes L1-L3 (labels never read)
 **Verdict (tools/lam_checks.py --select, `checkpoints/lam_selection.json`): "no arm passes L1-L3: STOP".**
 - G1 and G2 were never run; no true action or RAM was read for Stage 1.
