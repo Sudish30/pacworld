@@ -71,6 +71,34 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## RESUMED 2026-09-29 by the owner: balance topped up to $29.94; balance floor lowered to **$10 for this run**
+The $100 total cap is unchanged. The balance is still checked before every pod job, and I stop and report if a job
+would take it below $10. Order: finish the Stage 0 pod steps (df/du, sha256 of the 128px files, full-split ceiling),
+then Stage 1. The treatment of DIAMOND's P-D1 remains the owner's decision.
+
+**Stage 0, pod half (2026-09-30).**
+- **Pod** `pacworld-lam` (`d9qr7fnu01zu9m`): RTX PRO 4500 Blackwell 32 GB, 12 vCPU, 62 GB RAM, $0.72/h, EU-RO-1,
+  network volume attached. No RTX 4090 with a CUDA 13 host was in stock in EU-RO-1, and the volume cannot leave the
+  region. Image `runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404`, with port 22 published after creation. SSH:
+  `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p 40637 root@213.173.102.27`; the host and port change if the pod restarts.
+- The volume's venv works unchanged: torch 2.14.0+cu130 with CUDA available.
+- Code is synced from the Mac by `rsync -rlptz` (never `-a`; the network filesystem rejects chown). Checksums of the
+  key files match the Mac; the split sha256 is `7ba75f8952e767b3`.
+- **wandb is not logged in on this pod.** The key lives on the old pods' container disks. Every pod training run
+  therefore uses `--wandb-mode offline`; its `wandb/offline-run-*` folder is rsynced to the Mac and uploaded there with
+  `wandb sync`, since the Mac is logged in. The owner's key is never copied to a pod.
+- **Disk** (`logs/stage0_disk.log`; `df` on this filesystem reports the whole cluster, so `du` is used): about 75 GB
+  used before deletion.
+- **The 128px cache is deleted after the checks.**
+  - Only references: the two finished 128px run configs, `tools/pipeline_128.sh` and the Stage 0 checker. No running
+    process used it.
+  - sha256 `frames128_2m.npy` = `d66896f98fe084cf73346f22f5b57a24e0316cec6140563ac810ab5513ed02d8`
+    (36,168,728,704 bytes).
+  - sha256 `frames128_2m_meta.npz` = `c68f4f11f1313496a628fb7f6b20dcb09b8ca9a303d77d36817af5f6e45e94db`
+    (26,554,265 bytes).
+  - After deletion: about 41 GB used of 100.
+- Running now: Pac-Man positions over `frames64_2m.npy`, and the visible-action ceiling on all 388 val episodes.
+
 ## STOPPED 2026-09-29: a pre-registered gate failed (STEP 5, P-D1), and the RunPod balance is -$0.06
 **Spend so far: $0 GPU.** No pod was started. Everything below ran on the Mac CPU.
 

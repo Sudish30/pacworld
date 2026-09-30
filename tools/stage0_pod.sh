@@ -22,8 +22,8 @@ st "2. the 128px files: sha256 and users (nothing is deleted here)"
 
 st "3. frozen split and wandb"
 [ "$(sha256sum configs/val_episodes_2m.json | cut -c1-16)" = "7ba75f8952e767b3" ] || fail "val split is not the frozen one"
-.venv/bin/wandb login --verify > /dev/null 2>&1 || fail "wandb login (run: .venv/bin/wandb login)"
-st "   split sha256 ok, wandb ok"
+if .venv/bin/wandb login --verify > /dev/null 2>&1; then st "   split sha256 ok, wandb logged in"
+else st "   split sha256 ok; wandb NOT logged in on this pod: runs use --wandb-mode offline and are synced from the Mac"; fi
 
 st "4. Pac-Man positions over frames64_2m.npy (pixel detector)"
 [ -f data/cache/pac64_2m.npy ] && st "   exists, skipped" || \
