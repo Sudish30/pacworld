@@ -1,0 +1,42 @@
+# 2600 Pac-Man recording for the hidden-timer rule, part b (notes/timer_rule_design.md section 9): random play, same frame pipeline.
+env:
+  id: ALE/Pacman-v5
+  frameskip: 1             # emulator frames per env.step; we skip manually (see below)
+  repeat_action_probability: 0.0
+  full_action_space: false
+
+# Manual frame skip: repeat each action for frame_skip emulator frames and
+# store the pixel-wise max of the last max_pool_last raw frames. Ms. Pac-Man
+# draws only one ghost per emulator frame, cycling through all four over 4
+# frames, so pooling over 2 frames (the DQN default) shows all four ghosts in
+# only ~29-47% of observations; pooling over all 4 frames shows them in ~99%.
+frame_skip: 4
+max_pool_last: 4
+
+# Rows [top, bottom) of the 210x160 frame that contain the maze.
+# Rows 172+ are the score and lives display.
+crop:
+  top: 0
+  bottom: 172
+
+n_envs: 8
+steps: 1000000           # total env steps across all envs before stopping new episodes
+mode: random             # agent | random (uniform random action every step; the house timer runs after deaths)
+out_dir: data/pacman
+
+# Exploration on top of the PPO agent (agent mode only).
+eps: 0.1                 # probability of a uniformly random action
+sticky_prob: 0.02        # per-step probability of starting a sticky-random segment
+sticky_len: [5, 30]      # inclusive range of sticky segment lengths
+
+agent:
+  hf_repo: sb3/ppo-MsPacmanNoFrameskip-v4
+  hf_file: ppo-MsPacmanNoFrameskip-v4.zip
+  obs_size: 84           # policy was trained on 84x84 grayscale
+  frame_stack: 4
+  device: cpu
+
+playback:
+  scale: 3
+  fps: 15
+  band_px: 14            # height of the text band added below each frame

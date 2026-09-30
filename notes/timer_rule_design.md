@@ -152,9 +152,75 @@ test of that cell.
 - A CPU pilot on the Mac validates the pipeline first (one C10 and one S10 cell at reduced steps). Pilot numbers are
   pipeline checks, not results, and are not scored.
 
-## 9. Part b: real ALE games (a separate pre-registration, written before those runs)
+## 9. Part b: a real Atari game. PRE-REGISTRATION (2026-09-30, before any data is recorded or any model trained)
 
-Part b takes 1-2 ALE games whose hidden timer is readable from RAM (for evaluation only), preferably with different
-periods. It trains the C10 vs S10 layouts with the pacworld recipe at 64px and tests R1/R3 on the real timer. The
-games, RAM addresses, periods, detectors and criteria are chosen and committed in `notes/handoff.md` before any data
-is recorded.
+**Game search** (exploratory, `notes/handoff.md`). 45+ ALE games were scanned for regular RAM countdowns, and the
+frames around each countdown's end were inspected. One clean hidden timer passed every check:
+- **ALE/Pacman-v5** (the 2600 Pac-Man, a different game and engine from Ms. Pac-Man).
+- After every life loss, one ghost sits in the central house for **exactly 35 or 36 steps** (at our 4-frame skip) and
+  then leaves: 196 of 196 stays, 129 x 35 and 68 x 36.
+- **RAM byte 100** counts down monotonically through every stay and reads 0 at every release. It is used for
+  evaluation only.
+- Nothing on screen counts the stay: outside the house the screen repeats a fixed 2-step flicker pattern, and the
+  house shows the same motionless ghost throughout. The stay starts at a visible event (the respawn).
+- Rejected candidates and why are listed in the handoff.
+- No second clean timer with a different period was found. The real-game out-of-reach data point stays Ms.
+  Pac-Man's own frightened timer (124-134 steps, beyond S10's 97, never timed by any layout; handoff verdicts).
+- The period N ≈ 35 lies beyond C10's reach (10) and inside S10's (97), in S10's gap between offsets −33 and −49.
+  The rule predicts: **S10 releases the ghost with timing about as good as an observer limited to its offsets; C10
+  does no better than an observer blind to the respawn, and may park.**
+
+**Data** (`configs/record_pacman.yaml`, `record.py --mode random`):
+- The recorder's settings otherwise: frameskip 1 with a manual 4-frame skip, max-pool over all 4 frames, maze crop
+  rows 0-172, uniform random actions over the 5-action set, repeat_action_probability 0.
+- 1,000,000 steps, seed 45.
+- Frozen val split: 10% of episodes, chosen once (seed 0), saved in `configs/val_episodes_pacman.json` with its sha256.
+- 64px cache built as for Ms. Pac-Man (box resize).
+
+**Models** (the one variable is the context offsets):
+- The pacworld recipe: `model1.py`, 18.8M params, 64px, action-conditioned (5 actions), 100k steps at 1e-4 then a
+  15k-step anneal at 1e-5, batch 64, seed 0, the same EDM and context-noise settings.
+- `pac-C10`: offsets −10..−1. `pac-S10`: ctx6s16's offsets. Own checkpoint folders; every run logged to wandb.
+
+**Measurement** (`eval/pacman_house.py`, evaluation reads RAM):
+- Starts: every stay in the val episodes with ≥ 100 steps of real history. Context = real frames up to and including
+  the first frame with the house occupied (c).
+- Rollouts: recorded actions, 3-step Euler, context sigma 0, horizon 2 x 36 + 50 = 122 steps, one sampler seed per
+  start.
+- Lag: the first step at which the house reads empty in two consecutive frames. Parked = never within the horizon.
+- The truth per start is the RAM release (35 or 36).
+- Occupancy is a pixel test at 64px (the house box against the empty-house reference), calibrated only against RAM on
+  training episodes.
+- Metrics: on-time fraction (|lag − truth| ≤ tol, tol = max(2, 0.1 x 36) = 3.6), median |lag − truth|, release
+  fraction. Bootstrap 95% CIs over val episodes.
+- The **ideal observer** (house-occupied bits at each layout's offsets, hazard from the training episodes) is computed
+  and committed before any model trains, as in part a.
+
+**Pass/fail** (the same logic as part a):
+
+| id | check | pass |
+|---|---|---|
+| P-D0 | detector on real val frames: the pixel lag equals the RAM release for every start | 100% of starts |
+| P-I0 | the ideal observer for both layouts | computed and committed before training |
+| P-S | pac-S10 (N inside reach; a gap cell) | release fraction ≥ min(0.90, ideal − 0.10) and median \|lag − truth\| ≤ ideal median + 3 |
+| P-C | pac-C10 (N ≥ 1.5 x reach) | on-time fraction ≤ ideal + 0.15 |
+| P-R | the rule holds on this game | P-D0, P-S and P-C all pass |
+
+- Reported, not gating: C10's parking rate, early releases, standard rollout metrics.
+- **Pre-spend check.** (a) Most likely failures:
+  - the house state is not readable at 64px (box blending), which invalidates P-D0;
+  - random play gives short episodes, so S10's far offsets often clamp to the episode start;
+  - both models lose ghosts altogether (as DIAMOND did), making release timing unmeasurable for reasons unrelated to
+    reach.
+- **(b) Cheapest tests, run first:**
+  - $0: a 50k-step sample, then stay statistics, episode lengths and P-D0 on its 64px frames;
+  - GPU pilot: pac-S10 for 20k steps, scored on the val starts. It must render the occupied house and release it
+    within the horizon in ≥ 50% of starts, or the project stops before the full runs.
+- **(c) Differences from the base recipe** (pacworld on Ms. Pac-Man) and their risks:
+  - another game with a 5-action set;
+  - random play instead of PPO + ε, which gives less purposeful movement and more deaths. Neutral for a timer that
+    runs after deaths, but it changes the data distribution;
+  - 1M instead of 2.2M frames: less data, and the pilot checks learnability;
+  - a different GPU: speed only.
+- **Cost.** $0 recording on the pod CPU. On the RTX 2000 Ada ($0.24/h) the 64px UNet's speed is not measured yet; at
+  about 3 it/s the two 115k-step runs are about 21 GPU-hours, **about $5**.
