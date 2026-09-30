@@ -1,0 +1,29 @@
+# Pen-timer headline metrics with bootstrap 95% CIs over held-out EPISODES (eval/pen_bootstrap.py).
+# Occupancy is eval/pen_timer_analysis.py's class-agnostic test (pen box pixels differing from the maze reference),
+# recomputed per rollout from each run's saved frames (eval/results/<run>/model1/preds_all.npy + jobs.csv).
+bootstrap: 10000
+seed: 0
+parked_len: 200                      # "pen occupied 200+ consecutive steps"
+horizons: [450, 900]                 # 450 = the window of every originally reported pen number (ghost_diagnostics --horizon 450); 900 = supplementary
+runs:                                # name -> eval config (geometry, episodes, start step) and saved-frames folder
+  model1: {config: configs/eval.yaml, dir: eval/results/model1}
+  ctx4: {config: configs/eval_m1-2M-ctx4.yaml, dir: eval/results/m1-2M-ctx4/model1}
+  ctx8: {config: configs/eval_m1-2M-ctx8.yaml, dir: eval/results/m1-2M-ctx8/model1}
+  ctx6s16: {config: configs/eval_m1-2M-ctx6s16.yaml, dir: eval/results/m1-2M-ctx6s16/model1}
+  ft-uniform: {config: configs/eval_m1-2M-ctx6s16-ft-uniform.yaml, dir: eval/results/m1-2M-ctx6s16-ft-uniform/model1}
+  ft-events: {config: configs/eval_m1-2M-ctx6s16-ft-events.yaml, dir: eval/results/m1-2M-ctx6s16-ft-events/model1}
+  r148: {config: configs/eval_m1-2M-ctx-r148.yaml, dir: eval/results/m1-2M-ctx-r148/model1}
+  3m-r148-ft-fright: {config: configs/eval_m1-3M-r148-ft-fright.yaml, dir: eval/results/m1-3M-r148-ft-fright/model1}
+  3m-ctx6s16-ft-fright: {config: configs/eval_m1-3M-ctx6s16-ft-fright.yaml, dir: eval/results/m1-3M-ctx6s16-ft-fright/model1}
+  128-ft-uniform: {config: configs/eval_m1-2M-128-ctx6s16-ft-uniform.yaml, dir: eval/results/m1-2M-128-ctx6s16-ft-uniform/model1}
+original:                            # numbers previously reported at horizon 450 (handoff / README); the recomputation must reproduce them
+  model1: {parked: 16, median: 222}
+  ctx4: {parked: 17, median: 238}
+  ctx8: {parked: 23, median: 324}
+  ctx6s16: {parked: 0, median: 82}
+pairs:                               # paired differences on the same episodes (b - a)
+  - [ctx4, ctx8]                     # longer consecutive context
+  - [ctx4, ctx6s16]                  # strided context: the headline timer claim
+  - [model1, ctx4]                   # 10x data
+  - [ctx6s16, ft-uniform]            # LR anneal
+out: eval/results/stats

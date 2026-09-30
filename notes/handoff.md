@@ -98,6 +98,43 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STEP 6, part 2 (2026-09-30): pen-timer metrics with episode-bootstrap CIs (`eval/pen_bootstrap.py`, `configs/pen_stats.yaml`)
+- **Method.**
+  - Per rollout: the longest run with the pen occupied, by `pen_timer_analysis.py`'s own occupancy test, on each
+    run's saved frames. 10 held-out episodes x 3 seeds.
+  - The bootstrap resamples episodes (10,000 resamples). Paired differences use the same episodes.
+  - **All four originally reported numbers reproduce exactly at the original 450-step window:** Model 1 16/30 and
+    222, ctx4 17/30 and 238.5, ctx8 23/30 and 324, ctx6s16 0/30 and 82; real game median 78, max 91.
+  - The first pass used all 900 saved steps and did not reproduce (Model 1 24/30). The original analysis window is
+    450 steps (`ghost_diagnostics --horizon 450`); 900 steps is reported as supplementary.
+- **Horizon 450** (parked 200+ steps, fraction [95% CI]; median longest pen stay [CI]):
+
+| run | parked | median longest |
+|---|---|---|
+| Model 1 | 16/30 = 0.533 [0.367, 0.700] | 222 [188, 299] |
+| ctx4 | 17/30 = 0.567 [0.367, 0.767] | 238.5 [150, 287] |
+| ctx8 | 23/30 = 0.767 [0.633, 0.900] | 324 [282, 349] |
+| ctx6s16 | 0/30 [0, 0]* | 82 [73, 93] |
+| ft-uniform | 0/30* | 70 [65, 75] |
+| ft-events | 0/30* | 66.5 [55, 72] |
+| r148 | 0/30* | 110.5 [79, 136] |
+| 3m-r148-ft-fright | 0/30* | 87 [69, 112] |
+| 3m-ctx6s16-ft-fright | 0/30* | 64 [53, 69.5] |
+| 128-ft-uniform | 0/30* | 88 [79, 92] (its own ground truth is 38; the measure is not resolution-invariant) |
+
+- \* A bootstrap interval is degenerate when every rollout is 0. Exact alternative: no parked rollout in any of the
+  10 episodes gives a one-sided 95% upper bound of 1 − 0.05^(1/10) = **0.26** on the per-episode parking rate.
+- **Paired differences @450** (parked fraction):
+  - **ctx6s16 − ctx4 = −0.567 [−0.767, −0.367]**: the strided-context claim holds.
+  - ctx8 − ctx4 = +0.200 [−0.100, +0.467]: **not significant** ("8 frames parks more" is a trend only).
+  - ctx4 − Model 1 = +0.033 [−0.200, +0.267]: 10x data does not change parking.
+  - ft-uniform − ctx6s16 = 0.
+- **Horizon 900 (supplementary):**
+  - Model 1 24/30, ctx4 25/30, ctx8 29/30, ctx6s16 0/30, ft-uniform 0/30, **r148 3/30 = 0.10 [0, 0.20]**.
+  - ctx6s16 − ctx4 = −0.833 [−0.933, −0.733]; ctx8 − ctx4 = +0.133 [0.000, +0.267].
+  - Real game at 900 steps: median 84, max 91.
+- Files: `eval/results/stats/pen_bootstrap.json`, `logs/pen_bootstrap_summary.log`.
+
 ## Pod status (2026-09-30, after a disconnect)
 - The old pod `d9qr7fnu01zu9m` could not restart: its host had no free GPU. It was removed; everything is on the
   volume.
