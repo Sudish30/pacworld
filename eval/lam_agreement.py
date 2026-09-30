@@ -163,7 +163,8 @@ def main():
     label_opt = {int(k): v.most_common(1)[0][0] for k, v in conf.items()}
     sw, gt = np.array(R["sw"]), np.array(R["ghost_turn"])
     lift = float(sw[gt == 1].mean() - sw[gt == 0].mean()) if gt.any() and (gt == 0).any() else float("nan")
-    ceiling_file = ROOT / "eval/results/lam/visible_ceiling.json"
+    ceiling_file = next((f for f in (ROOT / "eval/results/lam/visible_ceiling_full.json", ROOT / "eval/results/lam/visible_ceiling.json")
+                         if f.exists()), ROOT / "eval/results/lam/visible_ceiling.json")   # the full 388-episode split if measured
     ceil = json.load(open(ceiling_file))["ceiling"] if ceiling_file.exists() else {}
     res = {"arm": arm, "codes": a.codes or lcfg["data"]["lam_codes"], "episodes": len(files), "decision_events": len(R["ev_code"]),
            "eligible_steps": len(R["all_code"]), "lag": 1,

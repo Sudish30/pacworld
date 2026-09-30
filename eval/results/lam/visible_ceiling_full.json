@@ -1,0 +1,48 @@
+{
+  "episodes": 388,
+  "decision_events": 21863,
+  "eligible_steps": 103937,
+  "majority_rate": {
+    "new_direction": 0.3648172711887664,
+    "action9": 0.23688423363673786,
+    "all steps action9": 0.18936471131550844
+  },
+  "direction_counts": {
+    "RIGHT": 7804,
+    "LEFT": 7976,
+    "DOWN": 3124,
+    "UP": 2959
+  },
+  "action_counts": {
+    "1": 1918,
+    "2": 2317,
+    "3": 1281,
+    "4": 2297,
+    "5": 2055,
+    "6": 2608,
+    "7": 4208,
+    "8": 5179
+  },
+  "ram1_none_frac": 0.026117184283950053,
+  "ceiling": {
+    "ram1 -> new_direction": 0.9250331610483465,
+    "ram1 -> action9": 0.5575172666148287,
+    "ram2 -> new_direction": 0.8279742029913553,
+    "ram2 -> action9": 0.49101221241366694,
+    "pix1 -> new_direction": 0.4264282120477519,
+    "pix1 -> action9": 0.2792846361432557,
+    "pix_lag1 -> new_direction": 0.7798106389790971,
+    "pix_lag1 -> action9": 0.4609157023281343,
+    "ram1+prev_direction -> new_direction": 0.9667017335223894,
+    "all eligible steps: ram1 -> action9": 0.3126894176279862
+  },
+  "pix1_class_counts": {
+    "x-": 3845,
+    "y+": 4097,
+    "x+": 4676,
+    "y-": 3873,
+    "none": 5371,
+    "undetected": 1
+  },
+  "n_for_se": 21863
+}

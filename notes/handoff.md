@@ -97,7 +97,14 @@ then Stage 1. The treatment of DIAMOND's P-D1 remains the owner's decision.
   - sha256 `frames128_2m_meta.npz` = `c68f4f11f1313496a628fb7f6b20dcb09b8ca9a303d77d36817af5f6e45e94db`
     (26,554,265 bytes).
   - After deletion: about 41 GB used of 100.
-- Running now: Pac-Man positions over `frames64_2m.npy`, and the visible-action ceiling on all 388 val episodes.
+- **Full-split visible-action ceiling: the precondition passes.** 388 val episodes, 21,863 decision events.
+  - Lag-1 pixel ceiling **0.7798**, at least the 0.76 stop line. The 35-episode estimate was 0.788.
+  - RAM one step -> new direction 0.925 (was 0.914); RAM -> 9-way action 0.558; lag-0 pixel 0.426.
+  - Majority class 0.365, so G1's bar is max(0.70, 0.365 + 0.30) = 0.70.
+  - All-step ceiling for 9-way agreement 0.313 (majority 0.189).
+  - Files: `eval/results/lam/visible_ceiling_full.json`, `logs/stage0_ceiling_gate.log`.
+- Pac-Man positions over `frames64_2m.npy` are still running. Stage 1 phase 1 (`tools/stage1_pod.sh`) starts when they
+  finish.
 
 ## STOPPED 2026-09-29: a pre-registered gate failed (STEP 5, P-D1), and the RunPod balance is -$0.06
 **Spend so far: $0 GPU.** No pod was started. Everything below ran on the Mac CPU.
