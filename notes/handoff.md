@@ -98,6 +98,28 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STEP 4b (2026-09-30): data, frozen split, P-D0 and P-I0, committed before any part-b model trains
+- **Data.** `record.py --config configs/record_pacman.yaml --seed 45`: 2,346 episodes, 1,001,780 steps, random
+  play, recorded on the pod CPU.
+- **Cache.** `frames64_pacman.npy`: 1,004,126 frames at 64px (box resize).
+- **Frozen split.** `configs/val_episodes_pacman.json`: 235 val / 2,111 train episodes, seed 0, sha256 `cfb19b8bd6576ad7`
+  (commit d88bff5).
+- **Window checks** (S10 layout): 881,824 train / 98,842 val windows all inside their episodes, 20.8% with a clamped
+  far offset; `History` == dataset window on 5,760 steps.
+- **P-D0 passes: 622/622 val starts** (every genuine stay: 360 x 35, 262 x 36). The 64px detector's release equals
+  the native-resolution truth in every one.
+- **P-I0**, the ideal observer: hazard from the 2,111 train episodes, 200 draws per start, bootstrap over the 235 val
+  episodes.
+  - **S10**: on-time (tol 3.6) 0.889 [0.887, 0.892], median |lag − truth| 2,
+    release fraction 0.998 [0.998, 0.999].
+  - **C10**: on-time 0.101 [0.099, 0.102], median error 17, release
+    fraction 0.982 [0.981, 0.983], early 0.547.
+- **Resulting bars** (the registered formulas, now numbers):
+  - **P-S** (pac-S10): release fraction ≥ min(0.90, 0.998 − 0.10) = **0.898** and median error ≤ 2 + 3 = **5**.
+  - **P-C** (pac-C10): on-time ≤ 0.101 + 0.15 = **0.251**.
+- **Next: the GPU pilot.** The first 20k steps of pac-S10. The full run resumes from that checkpoint only if the
+  model renders the occupied house and releases it within the horizon in ≥ 50% of val starts.
+
 ## STEP 4a pilot (2026-09-30): PASSES, so the other 21 cells run
 - Two registered cells, trained and scored exactly as registered, 15k steps each at about 7.2 it/s on the RTX 2000
   Ada, both in parallel:
