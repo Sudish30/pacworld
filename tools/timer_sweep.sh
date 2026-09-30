@@ -17,15 +17,10 @@ EOF
 run_cell() {
   local lay=${1%%:*} N=${1##*:} log=logs/timer/${1%%:*}-N${1##*:}.log
   [ -f "eval/results/timer/$lay-N$N.json" ] && { echo "skip $lay N=$N (scored)"; return 0; }
-  if ! $PY - "$lay" "$N" <<'EOF'
-import sys, torch, yaml, pathlib
-lay, N = sys.argv[1], sys.argv[2]
-c = yaml.safe_load(open("configs/timer.yaml"))
-ck = pathlib.Path(c["train"]["checkpoint_root"]) / f"{lay}-N{N}" / "model.pt"
-sys.exit(0 if ck.exists() and torch.load(ck, map_location="cpu")["step"] == c["train"]["steps"] else 1)
-EOF
+  # a cell with a finished checkpoint (step == train.steps) is not retrained (plain -c: a heredoc does not survive export -f)
+  if ! $PY -c "import sys,torch,yaml,pathlib; c=yaml.safe_load(open('configs/timer.yaml')); ck=pathlib.Path(c['train']['checkpoint_root'])/'$lay-N$N'/'model.pt'; sys.exit(0 if ck.exists() and torch.load(ck,map_location='cpu')['step']==c['train']['steps'] else 1)" 2>/dev/null
   then
-    $PY -u train_timer.py --layout "$lay" --N "$N" --seed 0 > "$log" 2>&1 || { echo "TRAIN FAILED $lay N=$N (see $log)"; return 1; }
+    $PY -u train_timer.py --layout "$lay" --N "$N" --seed 0 --wandb-mode "${WANDB_MODE_OVERRIDE:-offline}" > "$log" 2>&1 || { echo "TRAIN FAILED $lay N=$N (see $log)"; return 1; }
   fi
   $PY -u eval/timer_eval.py --layout "$lay" --N "$N" --seed 0 >> "$log" 2>&1 || { echo "EVAL FAILED $lay N=$N"; return 1; }
   tail -1 "$log"
