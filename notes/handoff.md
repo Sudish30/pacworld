@@ -71,6 +71,65 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STOPPED 2026-09-30: Stage 1 pre-registered stop, no LAM arm passes L1-L3 (labels never read)
+**Verdict (tools/lam_checks.py --select, `checkpoints/lam_selection.json`): "no arm passes L1-L3: STOP".**
+- G1 and G2 were never run; no true action or RAM was read for Stage 1.
+- By the pre-registration there is no retuning and no third arm. Any new LAM variant needs its own pre-registration.
+
+| check | arm A (generic) | arm B (player-weighted) | bar |
+|---|---|---|---|
+| L1: every direction has a code | FAIL (no code has a direction) | FAIL (no code has a direction) | all four |
+| L2: val perplexity | 1.00 FAIL | 1.97 FAIL | ≥ 4.0 |
+| L3: shuffled / inferred MSE [95% CI] | 1.0000000 [1.0000, 1.0000] FAIL | 1.0000068 [1.0000, 1.0000] FAIL | > 1, CI excludes 1 |
+| T_det (40503 detector-seen turns) | 0.000 | 0.000 | (selection only) |
+| codes over all 2,203,685 transitions | one code (100%) | two codes (1,293,177 / 910,508) | |
+
+**What happened.**
+- Both arms collapsed early. Code gain was x1.000 at every eval from 2.5k steps on; perplexity was 1.00 from 5k
+  (arm A) and 7.5k (arm B).
+- 85 (A) and 54 (B) dead-code restarts did not help; each re-collapsed.
+- The final code-swap grids (`outputs/lam-{A,B}/swap_030000.png`; also in wandb) show all 8 codes decoding to the
+  same frame for every val context. The decoder predicts the next frame well from the 97-step context alone
+  (val MSE 0.00023 / 0.00027) and has no use for 3 bits.
+- Arm B's 10x weight around Pac-Man did not change this.
+- A Mac check found no plumbing bug: gradients reach the code path, and codes do change the output when nothing
+  punishes it.
+- This is the failure the design named in advance: "the decoder ignores the code (L3 ratio ≈ 1, low perplexity)".
+
+**Plausible causes** (hypotheses, not tested; each would need its own pre-registration):
+- (1) The decoder is too strong relative to the action's share of the loss. Its 97-step context and 18.8M params
+  predict Pac-Man's turns from context, since the recording agent's policy is predictable. That is the same fact that
+  made replayed responsiveness unreliable.
+- (2) With zero-initialised AdaGN, the code path starts with zero gradient, and the encoder only receives the
+  commitment loss while the codebook collapses.
+- (3) A 1-step lag: the turn shows mainly in the transition after the code's own (§3a), so the code's own transition
+  carries little of it.
+
+Candidate variants for a new pre-registration, if the owner wants one:
+- a weaker or shorter-context decoder;
+- a larger commitment cost or codebook-usage regulariser;
+- an encoder that also sees frame j+2;
+- a continuous bottleneck with a KL budget.
+
+**Spend.** Pod `d9qr7fnu01zu9m` ran 06:20-10:05 UTC, about $2.67 (balance $29.94 -> $27.27). The pod is **stopped**
+(`EXITED`, no GPU billing); the network volume keeps everything. Total new GPU spend in this push: about $2.67 of the
+$100 cap.
+
+**wandb.** Runs `lam-A` (gw3v730x) and `lam-B` (icb32a3h) were trained offline on the pod and uploaded from the Mac to
+project `pacworld`.
+
+**Files.** On the volume: `checkpoints/lam-{A,B}/lam.pt`, `data/cache/lam_codes_{A,B}.npy`,
+`data/cache/pac64_2m.npy`, `logs/stage1_*.log`, `logs/firewall_pod.jsonl`. Copies on the Mac: `logs/pod/`,
+`checkpoints/lam-*/label_free_checks.json`, `outputs/lam-*/`.
+
+**Consequences for the plan.**
+- Stages 2-4 of the latent-action project do not run.
+- Still open for the owner:
+  - the treatment of DIAMOND's P-D1;
+  - whether to spend on STEP 4a (the synthetic timer sweep, pre-registered, about $2-3);
+  - STEP 6's pen-metric CIs, which need a pod for the saved rollout frames;
+  - whether to write a new LAM pre-registration.
+
 ## RESUMED 2026-09-29 by the owner: balance topped up to $29.94; balance floor lowered to **$10 for this run**
 The $100 total cap is unchanged. The balance is still checked before every pod job, and I stop and report if a job
 would take it below $10. Order: finish the Stage 0 pod steps (df/du, sha256 of the 128px files, full-split ceiling),
