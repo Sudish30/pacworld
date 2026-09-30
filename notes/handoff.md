@@ -98,6 +98,15 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## Pod status (2026-09-30, after a disconnect)
+- The old pod `d9qr7fnu01zu9m` could not restart: its host had no free GPU. It was removed; everything is on the
+  volume.
+- No RTX PRO 4500 or RTX 4090 with a CUDA 13 host was free in EU-RO-1.
+- New pod **`e6ip83c50b2gr0` (`pacworld-timer`)**: RTX 2000 Ada, 16 GB, driver 580, 48 vCPU, **$0.24/h**, volume
+  attached. SSH `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p 35193 root@213.173.110.197`.
+- The volume's venv works (torch 2.14.0+cu130, CUDA available). Code checksums match the Mac.
+- Balance before starting it: $27.13.
+
 ## STEP 4a pre-spend check (2026-09-30, written before any GPU spend; the criteria stay those of ab0a961 + Amendment 1)
 **(a) Most likely way it fails.**
 - The small models learn no timing at all within 15k steps, even inside their reach. The release is a one-frame
