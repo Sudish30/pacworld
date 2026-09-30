@@ -224,3 +224,21 @@ frames around each countdown's end were inspected. One clean hidden timer passed
   - a different GPU: speed only.
 - **Cost.** $0 recording on the pod CPU. On the RTX 2000 Ada ($0.24/h) the 64px UNet's speed is not measured yet; at
   about 3 it/s the two 115k-step runs are about 21 GPU-hours, **about $5**.
+
+### Part b, Amendment 1 (2026-09-30; from a $0 50k-step sample, before any real data, model or GPU spend)
+The pre-spend cheap test (50k steps, seed 45, the registered recording policy) showed that **RAM byte 100 is not the
+release timer**.
+- It is a countdown (2 per step) that restarts when the house fills and reaches 0 about 30 steps in. The ghost leaves
+  5 or 6 steps later.
+- The scan's "0 at every release" held only because the byte then sits at 0.
+- Measured against it, P-D0 would read 0/312. The criterion was wrong, not the detector.
+
+**Corrections** (nothing else changes; the criteria P-S, P-C and P-R and their bars stay as registered):
+- **Truth per start** = the release in the real frames at native resolution: the first of two consecutive frames
+  without ghost pixels in the house box. In the sample every genuine stay lasts 35 or 36 steps (191 x 35, 119 x 36).
+- RAM byte 100 is reported only as evidence that the hidden timer lives in game memory.
+- **Starts** = house-occupancy onsets whose real occupancy lasts at least 10 steps, with ≥ 100 steps of real history.
+  Ghosts passing through the house box last at most 5 steps: 2 in the sample.
+- **P-D0** = the 64px detector's release equals that truth for 100% of starts. Sample: 310/310.
+- Also from the sample: episodes last a median 420 steps (p10 348); 56% of stays begin ≥ 100 steps into their
+  episode.
