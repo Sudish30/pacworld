@@ -1,3 +1,30 @@
+# GOAL (owner, 2026-09-30; keep at the top): get pacworld to publishable-preprint level (~8.5/10)
+**Priority order:**
+1. The hidden-timer rule across a synthetic game and 1-2 Atari games.
+2. Bootstrap CIs.
+3. Baseline.
+4. Learned controls v2.
+5. README + GIF + paper draft.
+
+Honest results only, including negative ones.
+
+**Standing rules:**
+- Pre-register criteria in this file and commit before any claimed result. Never change a criterion after seeing
+  results; report a wrong criterion instead of fixing it.
+- One variable at a time. Frozen splits with checksums. Controls included. Bootstrap 95% CIs over episodes, not
+  rollouts.
+- Log every training run to wandb project `pacworld`. Until the owner logs the pod in, runs are offline and synced
+  from the Mac.
+- GPU cap $100 in total. Check the balance before every pod job; floor $10 for this run. Stop pods when idle.
+- No schedules or time estimates in docs.
+- **Before spending GPU money on any experiment, write down:**
+  - (a) the most likely way it fails;
+  - (b) the cheapest test that would catch that failure;
+  - (c) every way the design differs from the published method it is based on, and the risk each difference
+    creates.
+
+  Run the cheap test first.
+
 # pacworld handoff (2026-09-17, rev 2)
 
 ## Where things stand
