@@ -103,8 +103,14 @@ then Stage 1. The treatment of DIAMOND's P-D1 remains the owner's decision.
   - Majority class 0.365, so G1's bar is max(0.70, 0.365 + 0.30) = 0.70.
   - All-step ceiling for 9-way agreement 0.313 (majority 0.189).
   - Files: `eval/results/lam/visible_ceiling_full.json`, `logs/stage0_ceiling_gate.log`.
-- Pac-Man positions over `frames64_2m.npy` are still running. Stage 1 phase 1 (`tools/stage1_pod.sh`) starts when they
-  finish.
+- **Pac-Man positions done:** found in 99.9986% of 2,207,564 frames (the Mac's 200k set: 100%). sha256
+  `ed0fe8888fbd766e...`; 2,367 s on 11 workers.
+
+**Stage 1 phase 1 started 07:17 UTC (balance $29.27 before launch).**
+- **Firewall double runs on the real pod configs pass:** `lam-A.yaml` and `lam-B.yaml`, 150 steps each. Losses,
+  weights sha256 and val codes are identical with the recorded actions scrambled (`logs/firewall_pod.jsonl`).
+- LAM speed on this GPU: 8.3-8.4 it/s at batch 64.
+- `lam-A` training started 07:34 UTC.
 
 ## STOPPED 2026-09-29: a pre-registered gate failed (STEP 5, P-D1), and the RunPod balance is -$0.06
 **Spend so far: $0 GPU.** No pod was started. Everything below ran on the Mac CPU.
