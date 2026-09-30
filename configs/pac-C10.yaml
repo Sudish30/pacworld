@@ -1,0 +1,67 @@
+# pac-C10: hidden-timer rule part b (notes/timer_rule_design.md section 9 + Amendment 1) on the 2600 Pac-Man (ALE/Pacman-v5).
+# The pacworld recipe (model1, 64px, EDM, context noise); the ONLY difference between pac-C10 and pac-S10 is data.context_offsets.
+
+data:
+  folder: data/pacman/random       # record.py --config configs/record_pacman.yaml --seed 45 (1M steps, random play)
+  cache: data/cache/frames64_pacman.npy   # streamed .npy cache; metadata in frames64_pacman_meta.npz
+  val_episodes: configs/val_episodes_pacman.json   # frozen on the first cache build: val_frac of episodes, split_seed
+  val_frac: 0.1
+  split_seed: 0
+  size: 64
+  context: 10
+  context_offsets: [-10, -9, -8, -7, -6, -5, -4, -3, -2, -1]
+
+model:
+  widths: [64, 96, 192, 192]           # at 64 / 32 / 16 / 8 px (~18.8M params)
+  blocks_per_level: 2                  # encoder blocks per level (decoder uses one more)
+  attn_levels: [2, 3]                  # self-attention after every block at 16 and 8 px
+  heads: 4
+  cond_dim: 256
+  action_embed_dim: 32
+  n_actions: 5                         # ALE/Pacman-v5 minimal action set
+  groupnorm_groups: 32
+  fourier_dim: 64                      # Fourier features for the noise-level embeddings
+  dropout: 0.0
+
+diffusion:                             # Karras et al. 2022 (EDM), DIAMOND Atari values
+  sigma_data: 0.5
+  p_mean: -0.4                         # ln(sigma) ~ N(p_mean, p_std) during training
+  p_std: 1.2
+  sigma_min: 0.002
+  sigma_max: 20.0
+  rho: 7
+  rollout_steps: 3                     # Euler steps for autoregressive rollouts
+  grid_steps: 10                       # Euler steps for eval grids
+
+ctx_noise:                             # GameNGen-style context noise augmentation
+  enabled: true
+  prob: 0.5                            # fraction of training samples whose context is noised
+  sigma_min: 0.002                     # log-uniform range of the context noise level
+  sigma_max: 0.5
+  infer_sigma: 0.0                     # context noise level used at inference
+
+train:
+  steps: 100000
+  batch_size: 64
+  lr: 1.0e-4
+  weight_decay: 0.01
+  warmup_steps: 100                    # linear warmup, then constant
+  grad_clip: 1.0
+  prefetch: true                       # batch gathering overlapped with the GPU step (same distributions)
+  noise_on_device: true                # context noise drawn on the GPU (same distribution, different random stream)
+  ema_decay: 0.999
+  bf16: true
+  log_every: 50
+  eval_every: 5000
+  eval_batches: 20                     # fixed val batches (fixed sigma and noise) for val denoising loss
+  device: auto
+  checkpoint_dir: checkpoints/pac-C10
+  wandb_project: pacworld
+
+eval:
+  out_dir: outputs/pac-C10
+  grid_samples: 8
+  rollout_seconds: 5
+  rollout_start: 100
+  fps: 15
+  upscale: 4

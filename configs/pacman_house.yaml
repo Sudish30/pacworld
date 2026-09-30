@@ -1,0 +1,36 @@
+# Hidden-timer rule part b on the 2600 Pac-Man: the ghost-house stay (notes/timer_rule_design.md section 9 + Amendment 1).
+# eval/pacman_house.py. EVALUATION: truth comes from the real frames at native resolution.
+data:
+  folder: data/pacman/random
+  val_episodes: configs/val_episodes_pacman.json   # frozen by the first cache build (dataset.py)
+  size: 64
+  resample: box
+
+house:
+  native_rows: [91, 100]               # house box in the 172x160 maze crop (rows, cols; end exclusive)
+  native_cols: [76, 84]
+  ghost_rgb: [252, 144, 200]           # ghost pink
+  ghost_tol: 60                        # L1 colour distance for a ghost pixel
+  native_min_px: 4                     # house occupied at native resolution: >= this many ghost pixels in the box
+  small_rows: [33, 38]                 # the same box at 64px (64 * r / 172, 64 * c / 160)
+  small_cols: [30, 34]
+  small_resid: 40                      # 64px: a pixel differs from the empty-house reference by more than this (L2)
+  small_min_px: 2                      # 64px: house occupied if >= this many such pixels (99.8% agreement on the sample)
+
+starts:
+  min_history: 100                     # real frames before the start (>= S10's reach, 97)
+  min_stay: 10                         # genuine stays last 35-36 steps; ghosts passing through the box last <= 5
+
+eval:
+  horizon: 122                         # 2 x 36 + 50
+  tol: 3.6                             # max(2, 0.1 x 36)
+  sampler_steps: 3
+  ctx_sigma: 0.0
+  batch: 64
+  ideal_draws: 200
+  bootstrap: 2000
+  out_dir: eval/results/pacman
+
+layouts:
+  C10: {offsets: [-10, -9, -8, -7, -6, -5, -4, -3, -2, -1], checkpoint: checkpoints/pac-C10-ft-uniform/model1_ema.pt}
+  S10: {offsets: [-97, -81, -65, -49, -33, -17, -4, -3, -2, -1], checkpoint: checkpoints/pac-S10-ft-uniform/model1_ema.pt}
