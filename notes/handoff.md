@@ -177,6 +177,11 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
   attached. SSH `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p 35193 root@213.173.110.197`.
 - The volume's venv works (torch 2.14.0+cu130, CUDA available). Code checksums match the Mac.
 - Balance before starting it: $27.13.
+- **Second pod `th9dydo5fauw33` (`pacworld-partb`): RTX 4090, $0.74/h, on the same network volume.** Two pods can
+  share the volume. SSH `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p 31141 root@213.173.98.97`.
+- Part b needs it: the 18.8M UNet ran below 0.7 it/s on the shared RTX 2000 Ada and slowed the timer sweep. On the
+  4090 it runs at 9.0 it/s.
+- The timer sweep stays on `e6ip83c50b2gr0`. Balance before creating it: $26.60.
 
 ## STEP 4a pre-spend check (2026-09-30, written before any GPU spend; the criteria stay those of ab0a961 + Amendment 1)
 **(a) Most likely way it fails.**
