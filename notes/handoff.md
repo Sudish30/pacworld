@@ -98,6 +98,24 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## 2026-10-01: both GPU jobs launched; owner's answers; resume check for part b
+- **Owner:** no git history rewrite (old pod IPs stay in history). The 4b staging (strided first, P-S gates, stop for
+  good on a fail) is confirmed. tectonic: the prebuilt 0.17.0 binary from its GitHub releases is in `.venv/bin/`
+  (the Homebrew source build was cancelled); `cd paper && ../.venv/bin/tectonic main.tex` compiles the paper.
+- **`main` is 37+ commits ahead of `origin/main`: nothing of this push is on GitHub yet.** The owner reviews the
+  README first. Do not push without the owner's word.
+- **Pods.** `076wd0s1jsiw49` (`pacworld-partb2`, RTX 4090, $0.74/h, new; the old 4090 pod's host had no free GPU)
+  runs `tools/partb_attempt2.sh`. `e6ip83c50b2gr0` (RTX 2000 Ada, $0.24/h) runs the part a follow-up
+  (`GRID=followup_grid`). Balance before the 4090 started: $24.56. The stopped pod `th9dydo5fauw33` holds nothing
+  (everything is on the volume) and can be removed.
+- **Is the resumed pac-S10 run the same as a fresh full run? (owner's question)**
+  - **LR schedule: yes.** `train_model1.py` uses a 100-step linear warmup and then a constant 1e-4. It does not depend
+    on the run length, so the pilot's 20k steps had exactly the LR a full run has.
+  - **State: yes.** The resume restores the live weights, the EMA weights, the optimizer state and the step counter.
+  - **Random stream: no.** On resume the batch and noise generators are re-seeded from seed + step, so steps
+    20,001-100,000 draw different batches than an uninterrupted seed-0 run would. Same distribution, not bit-identical.
+    The run was resumed once, at step 20,000. This is stated in the paper's limitations.
+
 ## PRE-REGISTERED 2026-10-01, before any run: part b attempt 2 and the part a follow-up (`notes/timer_rule_design.md` sections 10-11)
 - **Part b attempt 2** (section 11): the full runs as designed, same bars (P-S: release ≥ 0.898 and median ≤ 5; P-C:
   on-time ≤ 0.251). pac-S10 resumes from its 20k checkpoint and runs first; **P-S is the gate**. If it fails, part b

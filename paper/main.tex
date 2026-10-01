@@ -86,6 +86,7 @@ seeds.
 \label{sec:context}
 \begin{table}[h]
 \centering\small
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{lcccc}
 \toprule
 model & parked 200+ steps & longest pen stay (median) & Pac-Man err @450 (px) & responsiveness @450 \\
@@ -97,7 +98,7 @@ ctx8 & 23/30 [0.63, 0.90] & 324 [282, 349] & 19.1 [12.6, 25.2] & 0.38 [0.26, 0.5
 \textbf{ctx6s16} & \textbf{0/30} [0, 0]$^*$ & \textbf{82} [73, 93] & 13.7 [9.1, 18.6] & 0.39 [0.36, 0.41] \\
 ctx6s16 + LR anneal & 0/30$^*$ & 70 [65, 75] & 14.6 [10.4, 19.3] & 0.43 [0.40, 0.46] \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \caption{Pen-timer and coherence metrics at the 450-step horizon. Brackets: 95\% bootstrap CIs over episodes; for
 parking, the CI of the parked fraction. All four originally reported pen numbers reproduce exactly. $^*$With no
 parked rollout in any of the 10 episodes, the bootstrap interval is degenerate; the exact one-sided 95\% upper bound
@@ -289,6 +290,9 @@ hence the wide CIs.
 \item The synthetic test isolates timing but has no action conditioning, and uses one seed per cell. Its
 out-of-reach criterion is one-sided, so parking passes it.
 \item The real-game test of the rule stopped at its pilot.
+% TODO(owner) once attempt 2 is scored: replace the line above. Attempt 2's strided run was resumed once from the
+% pilot's 20k-step checkpoint: same LR (constant after warmup), weights, EMA and optimizer state, but a re-seeded
+% batch/noise stream, so it is not bit-identical to an uninterrupted run.
 \item The frightened timer remains unsolved.
 \item Responsiveness on replayed trajectories partly measures how predictable the agent is, not controllability.
 \item The pen-occupancy measure is not resolution-invariant; at 128px its own ground truth differs.
