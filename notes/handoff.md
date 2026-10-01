@@ -98,6 +98,65 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STOP (2026-10-01): two pre-registered gates failed. Part b is closed for good; the LAM v2 pilot fails
+
+### Part b, attempt 2: P-S FAILS, so part b stops for good (owner's rule); pac-C10 was not trained
+Scored by `tools/partb_attempt2.sh` against section 11 of `notes/timer_rule_design.md` (commit 1c0f9c3). 622 val
+starts in 235 episodes; truth 35-36 steps; [ ] = bootstrap 95% CI over episodes; P-D0 622/622.
+
+| pac-S10 at | release fraction | median \|lag − truth\| | on-time (tol 3.6) | early | parked |
+|---|---|---|---|---|---|
+| 20k steps (attempt 1's stopped pilot) | 0.486 [0.445, 0.525] | 86 | 0.040 | 0.019 | 320 |
+| 100k steps (reported, not gating) | 0.678 [0.639, 0.718] | 65 [61, 69.5] | 0.031 [0.018, 0.044] | 0.016 | 200 |
+| **115k steps, after the anneal (the gate)** | **0.986 [0.976, 0.994]** | **12 [10, 13]** | 0.219 [0.184, 0.253] | 0.207 | 9 |
+| ideal observer (S10 offsets) | 0.998 | 2 | 0.889 | 0.003 | - |
+| **P-S bar** | ≥ 0.898: **pass** | ≤ 5: **FAIL** | - | - | - |
+
+- **The trained model releases the ghost but does not time it.** It parks in only 9 of 622 starts, but its lags are
+  spread from early to very late: 10th / 25th / 50th / 75th / 90th percentiles 28 / 33 / 44 / 72 / 96 steps against
+  a truth of 35-36. It is on time in 0.22 of starts, where the observer limited to the same frames manages 0.89.
+- **The anneal changed the behaviour sharply**: release 0.68 -> 0.99 and median error 65 -> 12 in 15k low-LR steps.
+- **What it means for the rule.** P-R fails: on this real game, a context that reaches the period did not produce
+  observer-level timing at this budget. This agrees with the synthetic verdict ("reach is necessary but not
+  sufficient") and with the between-frames finding: the stay (35-36) falls between S10's frames at −33 and −49.
+  It is one game, one seed and random-play data.
+- **No C10 model exists**, so the real-game contrast between layouts (P-C) was never measured.
+- The S10 run was resumed once at step 20k (LR, weights, EMA and optimizer identical to an uninterrupted run; the
+  random stream re-seeded), as recorded above.
+- wandb: `qks6sp4j` (pac-S10, steps 20k-100k) and `3ia8y0mj` (the anneal), uploaded from the Mac.
+- Result files: `eval/results/pacman/{S10,S10-100k,S10-pilot20k}.json`; pod log copy `logs/pod/partb_attempt2.log`.
+
+### LAM v2 pilot: FAILS condition 3 (ghost capture); stopped, no second pilot (owner's rule)
+Scored by `tools/lam_pilot.py` against `notes/lam_v2_design.md` (commit dc26b72) at step 2,500. Code on the pod matched
+the Mac by checksum. wandb run `y9zx51ps`.
+- **Entropy weight on the pod** (first batch, seed 0): L_recon 0.012969 / |T| 0.211708 = **0.06126**.
+
+| condition | value | bar | result |
+|---|---|---|---|
+| 1. perplexity | 7.42 | ≥ 4 | pass |
+| 2. code gain | x1.0196 (val MSE 0.001326 inferred, 0.001352 shuffled) | > 1.01 | pass |
+| 3. Pac-Man share > ghost share | **Pac-Man 0.067, ghosts 0.400** (both 0.008, elsewhere 0.525) | Pac-Man > ghosts | **FAIL** |
+
+- **The codes are used, and they are spread, but they describe the ghosts.** All 8 codes are in use (0.07-0.22
+  each, 0 restarts) and the decoder's error rises when codes are shuffled. But the 8-code output spread near ghosts
+  is six times the spread near Pac-Man in total, and twice as large per pixel (1.76e-4 vs 0.91e-4; elsewhere
+  0.08e-4). Pac-Man was detected in 1,000 of the 1,000 contexts and a ghost in 961.
+- This is the main risk the pre-registration named: from a single frame the ghosts' headings are as ambiguous as
+  Pac-Man's, and there are up to four of them. The x11 player weight did not outweigh that.
+- **Not run:** the remaining 27,500 steps, codes, prior, key map, L1-L3, G1, G2. No action label was read.
+- A v3 would need its own pre-registration. One direction the result points to (not registered, not run): a decoder
+  loss or code path restricted to the region around Pac-Man.
+- Files: `checkpoints/lam-v2/pilot.json`, `outputs/lam-v2/swap_002500.png`, `logs/pod/lam-v2_pilot.log` (Mac copies).
+
+### Spend and pods after these two stops
+- Pod `076wd0s1jsiw49` (RTX 4090) ran part b attempt 2 and the LAM v2 pilot and is **stopped**. No pod is running.
+- Balance **$21.04**. Total new GPU spend in this push: about **$8.90** of the $100 cap ($29.94 at the top-up; includes
+  volume storage). Today: about $3.15 on the 4090 and $0.40 on the RTX 2000 Ada.
+- Three stopped pods remain (`076wd0s1jsiw49`, `th9dydo5fauw33`, `e6ip83c50b2gr0`); they hold nothing (all data is on
+  the volume) and can be removed by the owner.
+- **Nothing further is registered.** Open for the owner: push of `main`; README/paper updates for the follow-up, part
+  b and LAM v2; whether to register anything new.
+
 ## PART A FOLLOW-UP VERDICT (2026-10-01): the owner's prediction is SUPPORTED as registered
 Scored by `tools/timer_followup_verdict.py` against section 10 of `notes/timer_rule_design.md` (commit 1c0f9c3).
 Nothing was changed after the results. `followup_verdict.json` sha256 `c0ab445bb48e306f`; 4 wandb runs uploaded
