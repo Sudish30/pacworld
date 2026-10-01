@@ -25,7 +25,7 @@ difference to 4 frames $-0.57$, 95\% CI $[-0.77,-0.37]$ over episodes).
 We state a rule: a model can time a hidden event of period $N$ only as precisely as its context offsets resolve $-N$.
 In a pre-registered sweep of 23 small models on a synthetic game, scored against an ideal observer limited to the same
 offsets, the rule holds \emph{partially}: no model times a period beyond its reach, and models with a frame exactly
-at $-N$ match the observer at three of four long periods, but a period between two frames parks. A follow-up,
+at $-N$ match the observer at three of four long periods, but one of three periods between two frames ($N{=}80$) parks. A follow-up,
 pre-registered after that result, changes one offset: moving a frame from $-81$ to $-80$ takes the $N{=}80$ model from parking in 37 of 60
 starts to parking in none, while three periods between frames of the new layout park more than the observer allows
 (one of them by a single start).
@@ -35,7 +35,9 @@ context frames, which is consistent with the synthetic finding but was not a reg
 We also report failed predictions and negative results in full: DIAMOND's released model loses its ghosts instead of
 parking them; two latent-action models trained without labels fail, the first by ignoring its codes and the second by
 spending them on ghosts; and several earlier claims do not survive episode-level confidence intervals.
-Every experiment was pre-registered before its results existed.
+From the context ablation on, every experiment's criterion was written before its result (the ablation's
+informally, and the strided model missed its ``max about 91 steps'' part with a longest stay of 148); the first diagnosis was exploratory, and the episode-level intervals were computed afterwards. Each
+model was trained with one seed.
 \end{abstract}
 
 \section{Introduction}
@@ -51,8 +53,9 @@ We make four contributions.
 ghosts in the pen; a strided context with a 97-step reach removes the parking (Sec.~\ref{sec:context}).
 \item \textbf{A testable rule with an ideal-observer prediction,} and a pre-registered synthetic sweep in which it
 holds partially (Sec.~\ref{sec:rule}).
-\item \textbf{A one-variable follow-up} showing that timing depends on where the context frames sit, not only on how
-far they reach: moving one frame by one step fixes a parked period (Sec.~\ref{sec:followup}).
+\item \textbf{A one-variable follow-up} suggesting that timing depends on where the context frames sit, not only on
+how far they reach: moving one frame by one step fixes a parked period (one training seed per cell;
+Sec.~\ref{sec:followup}).
 \item \textbf{A pre-registered evaluation that reports its failures:} a second real game that fails on timing
 (Sec.~\ref{sec:realgame}), a failed prediction about DIAMOND (Sec.~\ref{sec:diamond}) and two failed latent-action
 models (Sec.~\ref{sec:lam}). CIs are bootstrapped over held-out episodes.
@@ -118,6 +121,8 @@ on the per-episode parking rate is 0.26.}
 by $-0.833$ $[-0.933,-0.733]$ in 900-step rollouts.
 \item It also lowers Pac-Man error at 450 steps: $-5.3$ px $[-11.6,-0.5]$.
 \item The LR anneal improves responsiveness: $+0.044$ $[+0.009,+0.080]$.
+\item Among the 64px models, two significant differences at 450 steps are unfavourable: strided context slightly lowers wall IoU ($-0.007$
+$[-0.011,-0.002]$ against ctx4), and 8 consecutive frames lower pellet IoU ($-0.018$ $[-0.027,-0.010]$ against 4).
 \end{itemize}
 
 \paragraph{What does not hold.}
@@ -125,7 +130,8 @@ by $-0.833$ $[-0.933,-0.733]$ in 900-step rollouts.
 \item There is no clear evidence that eight frames park more than four: $+0.20$ $[-0.10,+0.47]$.
 \item There is no clear evidence that ten times more data changes parking ($+0.03$ $[-0.20,+0.27]$) or Pac-Man
 error ($-0.5$ px $[-2.7,+1.3]$); only responsiveness improves ($+0.071$ $[+0.014,+0.129]$).
-\item No difference in ghost count between our models is significant.
+\item No difference in ghost count between our models is significant. (Ghost ratios at 450 steps are defined in only
+4 of the 10 episodes, 12 rollouts.)
 \item A $128\times128$ version is sharper per step but drifts faster: Pac-Man error $+8.2$ px $[+1.9,+13.9]$ at
 64px-equivalent.
 \end{itemize}
@@ -134,11 +140,18 @@ error ($-0.5$ px $[-2.7,+1.3]$); only responsiveness improves ($+0.071$ $[+0.014
 \begin{itemize}
 \item No model ends frightened phases on time.
 \item A 145-step-reach model (13 frames) did not fix it: of 15 phases, 8 never ended and none ended within 124--134
-steps. It also weakened the pen timer that 10 frames had fixed (median longest stay 110 vs 82).
-\item Oversampling training windows around phase ends made phases end, but too early: 0 of 10 in range with the
-97-step reach (median 83 steps), 2 of 19 with the 145-step reach (median 84).
-\item Teacher-forced analysis shows every model copies the phase end one step after it appears in a real frame, instead
-of predicting it. The phase end is a one-frame event about once per episode, which the denoising loss barely rewards.
+steps. It also weakened the pen timer that 10 frames had fixed: median longest stay 110.5 $[79, 136]$ against 82
+$[73, 93]$, and fewer ghosts released within 150 steps (cyan 62\% vs 97\%, pink 55\% vs 89\%; no paired CI).
+\item Oversampling training windows around phase ends did not fix it. In a matched pair fine-tuned on the same
+enlarged data (25\% of each batch within $\pm8$ steps of a phase end), the 145-step model ended 23 of 25 phases but
+too early (2 of 19 scorable phases in range, median 84 steps), while the 97-step model let phases run on (0 of 9 in
+range; ended after 61--611 steps, median 202; 5 never ended). An earlier oversampling run with the 97-step reach on
+the original data had 0 of 10 in range (5 early, 3 late, 2 never ended). The two parents of the matched pair differ
+(only the 97-step parent had an LR anneal); one seed each.
+\item Teacher-forced analysis shows that the models trained without oversampling (Model~1, ctx6s16 and the 145-step
+model) copy the phase end one step after it appears in a real frame, 12 of 12 times, instead of predicting it. With
+oversampling the lag fell to 0.6--0.8 steps, still above the registered bar of 0.5. The phase end is a one-frame
+event that occurs 0.28 times per episode (about 0.05\% of training windows), which the denoising loss barely rewards.
 \end{itemize}
 Reach therefore appears \emph{necessary but not sufficient}.
 
@@ -219,7 +232,7 @@ decide each criterion.}
 \begin{itemize}
 \item \textbf{No model times a period beyond its reach.} All 10 R3 cells pass. Instead of the observer's geometric
 wait, the out-of-reach models mostly \emph{park}: they release in 0.12--0.30 of starts at long periods (C4
-$N\ge33$; C10 and S10 $N\ge65$), against 0.89--0.98 for the observer. This reproduces the Ms.~Pac-Man pen parking in a
+$N\ge33$; C10 $N\ge65$; S10 $N{=}200$), against 0.89--0.98 for the observer. This reproduces the Ms.~Pac-Man pen parking in a
 game with no other cause. R3 is one-sided, so it shows that no model beat a blind observer; it does not show that the
 models behave like one.
 \item \textbf{An exact offset gives exact timing when the observer is reliable.} All R1 cells but one pass, and at
@@ -307,25 +320,30 @@ without retraining: we re-simulated our held-out episodes in its preprocessing, 
 2-frame pooling, and rebuilt our detectors for its geometry. All validity checks passed.
 
 \paragraph{The registered prediction failed.} We had predicted that it would park ghosts in at least 10 of 30
-rollouts. It parked in 0/30. We report this as a failed prediction and do not redefine the test.
+rollouts. It parked in 0/30. The pre-registration stated that a failure with at least 5 of the model's own ghost
+respawns ``counts against the rule''; DIAMOND had 6. We report it as a failed prediction that, by its registered terms,
+counts against the rule, and we do not redefine the test.
 
-\paragraph{Why it does not test the rule.} Parking can only be measured while ghosts exist, and DIAMOND's ghosts
-vanish (Fig.~\ref{fig:ghosts}): its ghost count at 450 steps is 0.077 $[0.054,0.097]$ of its own ground truth, against
-0.41 $[0.25,0.61]$ for our 4-frame Model~1 and 0.58 $[0.30,0.87]$ for our served model. The vanishing is not a detector
-artifact: over the first 15 steps the detectors find 0.99 $[0.97,1.01]$ of the ground-truth ghost count in DIAMOND's
-generated frames, and 3.86 ghosts per ground-truth frame where 4 should be visible. The result is neither support for
-the rule nor evidence against it.
+\paragraph{A post-hoc reading.} The criterion assumed that ghosts survive long enough to be penned. Parking can only be
+measured while ghosts exist, and DIAMOND's ghosts vanish (Fig.~\ref{fig:ghosts}): its ghost count at 450 steps is
+0.077 $[0.054,0.097]$ of its own ground truth, against 0.41 $[0.25,0.61]$ for our 4-frame Model~1 and 0.58
+$[0.30,0.87]$ for our served model (these ratios are defined in 4 of the 10 episodes, 12 rollouts). The vanishing is
+not a detector artifact: over the first 15 steps the detectors find 0.99 $[0.97,1.01]$ of the ground-truth ghost count
+in DIAMOND's generated frames, and 3.86 ghosts per ground-truth frame where 4 should be visible. We therefore think
+the test says little about timing, but this argument was made after seeing the result.
 
 \begin{figure}[h]
 \centering
-\includegraphics[width=0.75\linewidth]{../docs/ghost_ratio.png}
+\includegraphics[width=0.75\linewidth]{ghost_ratio.png}
 \caption{Ghosts detected in generated frames, relative to each model's own ground truth, over 450-step rollouts
-(30-step bins). Bands: 95\% bootstrap CIs over the 10 episodes.}
+(30-step bins). Bands: 95\% bootstrap CIs over the episodes whose ground truth shows ghosts in that bin (10 in the first 60 steps,
+3--9 after).}
 \label{fig:ghosts}
 \end{figure}
 
 \paragraph{Other metrics.} DIAMOND keeps the walls best (wall IoU / own ceiling 1.000 $[0.995,1.004]$) and is worse on
-Pac-Man error (25.3 px $[19.1,31.2]$ vs 14.6 $[10.4,19.3]$ for our served model) and responsiveness (0.18
+Pac-Man error (25.3 px $[19.1,31.2]$, over the 19 of 30 rollouts in which Pac-Man is still detected, vs 14.6
+$[10.4,19.3]$ for our served model) and responsiveness (0.18
 $[0.13,0.24]$ vs 0.43 $[0.40,0.46]$).
 
 \paragraph{A reference point, not a head-to-head.} The two models differ in purpose (15-step imagination for RL vs
@@ -362,7 +380,7 @@ exists for either version, and we have closed this line of work.
 \begin{itemize}
 \item One game for the main study, 64px frames, one seed per training configuration, and 10 evaluation episodes,
 hence the wide CIs.
-\item The synthetic tests isolate timing but have no action conditioning, and uses one seed per cell. Its
+\item The synthetic tests isolate timing but have no action conditioning, and use one seed per cell. Their
 out-of-reach criterion is one-sided, so parking passes it.
 \item The second real game failed its registered test, and its C10 model was never trained, so the rule has no
 confirmation on a second real game. The strided run there was resumed once from the pilot's 20k-step checkpoint: the

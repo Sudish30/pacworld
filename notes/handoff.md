@@ -8,6 +8,30 @@
 
 Honest results only, including negative ones.
 
+**Workflow (owner, 2026-10-01): autonomous operation with an independent reviewer.**
+- **Reviewer.** `.claude/agents/research-reviewer.md` defines a skeptical reviewer agent. It is run BEFORE any GPU
+  spend, before committing any pre-registration, before any change to README/paper claims, before any push, and
+  after any gate result. Its verdict (APPROVE / APPROVE WITH CHANGES) decides; there is no escalation to the owner.
+  It never approves retuning a failed pre-registered test.
+- **Pre-approved, no need to ask the owner:**
+  - pushing to GitHub `main` after the reviewer approves;
+  - opening or closing lines of work on the reviewer's verdict;
+  - GPU spend up to **$40 more from 2026-10-01 (balance then $21.01)**, keeping the RunPod balance **above $3**;
+  - deleting stopped pods that hold no data.
+- **Hard limits. Never:**
+  - delete or modify the network volume or its data;
+  - rewrite git history or force-push;
+  - exceed the spend cap or let the balance hit zero;
+  - create, change or expose credentials or API keys;
+  - submit to arXiv, or anything else under the owner's name except pushing this repo. arXiv files are prepared
+    and the owner is told when they are ready.
+
+  If one of these would be needed: write it in `notes/owner_updates.md` and move to other work, or stop if nothing
+  else is useful.
+- **Owner updates.** At each milestone, a short plain-language update goes in `notes/owner_updates.md` (what
+  happened, why, what it means, what's next; jargon explained) and is summarised in chat. When money runs out or the
+  work is done, say so clearly.
+
 **Standing rules:**
 - Pre-register criteria in this file and commit before any claimed result. Never change a criterion after seeing
   results; report a wrong criterion instead of fixing it.
@@ -15,7 +39,8 @@ Honest results only, including negative ones.
   rollouts.
 - Log every training run to wandb project `pacworld`. Until the owner logs the pod in, runs are offline and synced
   from the Mac.
-- GPU cap $100 in total. Check the balance before every pod job; floor $10 for this run. Stop pods when idle.
+- GPU: see the Workflow note above ($40 more from 2026-10-01, balance above $3). Check the balance before every pod
+  job. Stop pods when idle.
 - No schedules or time estimates in docs.
 - **Before spending GPU money on any experiment, write down:**
   - (a) the most likely way it fails;
@@ -98,6 +123,36 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## REVIEW 1 (2026-10-01, research-reviewer): APPROVE WITH CHANGES on the pushed README/paper; all changes applied
+The reviewer agent type could not be loaded in the running session (agent files load at session start), so a
+read-only general-purpose agent on Opus was given `.claude/agents/research-reviewer.md` as its role. It checked every
+number against the local result files. Title, rule-vs-follow-up wording and install note: OK. Each required change
+was verified against the records before it was applied:
+1. **Frightened timer, oversampling:** "made phases end, but too early" was true only for reach 145. Now the matched
+   pair is given in full (reach 145: 23 of 25 end, 2 of 19 in range, median 84; reach 97: 0 of 9 in range, ended
+   61-611, median 202, 5 never ended) plus the earlier 97-step run (0 of 10; 5 early, 3 late, 2 never).
+2. **r148 pen stay** is 110.5 [79, 136], not 110; release percentages added.
+3. **Teacher-forced claim** limited to the models without oversampling; "once per episode" corrected to 0.28 per
+   episode (1,082 phase ends in 3,879 episodes).
+4. **DIAMOND:** the pre-registration said a failure with ≥ 5 own respawns "counts against the rule" (DIAMOND had 6).
+   README and paper now say so first and label the "ghosts vanish" argument as post-hoc.
+5. **"Every experiment was pre-registered" was an overclaim.** Now: the first diagnosis was exploratory; the context
+   ablation had an informal criterion written before its result (and ctx6s16's longest stay was 148, above its "max
+   ~91"); committed pre-registrations after that; episode CIs computed afterwards.
+6. **Small samples disclosed:** ghost ratios rest on 4 of 10 episodes at step 450 and 3 at step 150; DIAMOND's Pac-Man
+   error is over 19 of 30 rollouts.
+7. **Unfavourable significant differences added:** strided context lowers wall IoU by 0.007; 8 frames lower pellet
+   IoU by 0.018.
+8. **Seeds and generalisation:** "one of three periods between frames parks"; one training seed per cell stated.
+9. Small fixes: part b attempt 1 CI is [0.44, 0.52]; "C10 N≥65; S10 N=200"; the figure now sits inside `paper/`.
+
+**Reviewer's ranking of next steps** (about $18 usable):
+1. these corrections, related work, and an arXiv source bundle (no GPU);
+2. **training-seed replication of the synthetic follow-up** (pre-registration needed; about $2);
+3. more held-out evaluation episodes for the Ms. Pac-Man ablation (pre-registration needed; about $2-3);
+4. a second training seed for ctx4 and ctx6s16 (about $6-7), only if money remains;
+5. a real-game on-frame pen test: **not recommended** (it would be retuning the failed part b).
+
 ## PUSHED to `origin/main` (2026-10-01), after the owner cleared the README
 - The repo `Sudish30/pacworld` is **public** (`gh repo view`). The owner approved pushing everything.
 - Last fixes before the push:
@@ -105,7 +160,8 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
   - README and paper now say that the follow-up's "between frames park" prediction was registered after the sweep
     showed parking, and that the original rule had predicted timing "spread over that gap";
   - the frightened-timer sentence corrected to this file's records: r148 (reach 145) had 8 of 15 phases never end and
-    none in 124-134; the event-diet runs ended phases early (median 83 with reach 97, 84 with reach 145);
+    none in 124-134. (The oversampling summary pushed in d03a407, "ended phases early (median 83 with reach 97, 84
+    with reach 145)", was wrong for reach 97 and was corrected after the reviewer's check: see the next section.);
   - install instructions give the CUDA 13 PyTorch index (`https://download.pytorch.org/whl/cu130`, wheel
     `torch-2.14.0+cu130` confirmed present).
 - **Fresh-install test on the Mac ($0):** new Python 3.12 venv, `pip install -r requirements.txt` (CPU torch 2.14.0

@@ -12,14 +12,14 @@ browser at 15 fps. There is no public live demo; the code to serve it yourself i
 - **The main finding.** The network can only keep time using the past frames it is shown. The game holds ghosts in
   their pen for a fixed time with no countdown on screen. A network that sees only the last 4 frames cannot tell
   how long a ghost has waited, and leaves it parked there. Showing it a few older frames as well removes the parking.
-- **The follow-up.** In a small test game, a network timed a hidden 80-step wait correctly only when one of its past
-  frames sat exactly 80 steps back. Moving that one frame by a single step (from 81 back to 80) took it from parking
-  in 37 of 60 tries to parking in none.
+- **The follow-up.** In a small test game, a network timed a hidden 80-step wait correctly when one of its past
+  frames sat exactly 80 steps back; with that frame 81 steps back instead, it parked in 37 of 60 tries. One training
+  run per setting.
 - **What failed.** The same idea on a second real game gave a model that releases the ghost but at the wrong time.
   Two attempts to learn the controls from video alone, without key-press labels, failed. A prediction about another
   team's model (DIAMOND) was wrong. A second hidden timer in Ms. Pac-Man is still unsolved.
-- **How to read the numbers.** Every test's pass/fail rule was written down before its result existed, and failed
-  tests are reported as failures.
+- **How to read the numbers.** From the context comparison on, each test's pass/fail rule was written down before
+  its result existed, and failed tests are reported as failures. Each model was trained once (one random seed).
 
 ![the real game beside a 4-frame model and the strided-context model, same start and actions](docs/demo.gif)
 
@@ -41,9 +41,11 @@ only its last 4 frames cannot observe them, so it parks the ghosts in the pen. A
 frames but a longer *reach* (4 recent frames plus 6 frames 16 steps apart, spanning 97 steps) removes the parking.
 The frightened-phase timer is still unsolved.
 
-**How the work was done.** Every experiment was pre-registered: its pass/fail criteria were committed before its
-results existed, and failed predictions are reported as failures. Confidence intervals are 95% bootstrap intervals
-over held-out *episodes*, not rollouts. The full log is [`notes/handoff.md`](notes/handoff.md); a paper draft is in
+**How the work was done.** The first diagnosis of the parking was exploratory. From the context comparison on, every
+experiment's criterion was written before its result: informally for the context comparison (pen stays should match
+the real game, "max ~91, no 200+ runs"; the no-200+ part held, but the strided model's longest stay was 148), and as
+committed pre-registrations after that. Failed predictions are reported as failures. Confidence intervals are
+95% bootstrap intervals over held-out *episodes*, not rollouts, and were computed after the original runs. The full log is [`notes/handoff.md`](notes/handoff.md); a paper draft is in
 [`paper/`](paper/).
 
 ## Results
@@ -53,7 +55,9 @@ Rollouts of 450 steps (30 s) from 10 held-out episodes x 3 sampler seeds, replay
 ([`eval/bootstrap_ci.py`](eval/bootstrap_ci.py), [`eval/pen_bootstrap.py`](eval/pen_bootstrap.py)). With 10
 episodes the intervals are wide, and several differences that look real in the point estimates are not. Many
 paired comparisons are reported and none is corrected for multiple comparisons, so treat intervals that barely
-exclude zero with caution.
+exclude zero with caution. Ghost counts can only be compared with the real game while both are in a comparable
+state, so the ghost columns rest on fewer episodes: 4 of the 10 (12 rollouts) at step 450 and 3 (9 rollouts) at
+step 150.
 
 ### The pen timer
 
@@ -93,6 +97,9 @@ Paired differences on the same episodes:
   - strided context lowers Pac-Man error: −5.3 px [−11.6, −0.5] against ctx4;
   - the LR anneal improves responsiveness: +0.044 [+0.009, +0.080];
   - 10x data improves responsiveness: +0.071 [+0.014, +0.129].
+- **Supported, and unfavourable:**
+  - strided context slightly lowers wall IoU: −0.007 [−0.011, −0.002] against ctx4;
+  - 8 consecutive frames lower pellet IoU: −0.018 [−0.027, −0.010] against 4.
 - **Not supported:**
   - no clear evidence that 10x data lowers Pac-Man error (−0.5 px [−2.7, +1.3]) or changes any other metric here;
   - no clear evidence of any difference in ghost count between our models.
@@ -109,9 +116,16 @@ attempts to fix it failed; the details are in the handoff.
 
 - **A longer reach alone (145 steps, 13 frames) did not fix it.** Of 15 frightened phases, 8 never ended and none
   ended in the real 124-134 range; the 7 that ended did so after 7-9 or 168-474 steps. It also weakened the pen
-  timer (median longest pen stay 110, against 82 for the 97-step model).
-- **Oversampling training windows around phase ends made phases end, but too early.** With the 97-step reach, 0 of
-  10 phases ended in range (median of those that ended: 83 steps). With the 145-step reach, 2 of 19 did (median 84).
+  timer: median longest pen stay 110.5 [79, 136] against 82 [73, 93] for the 97-step model, and fewer ghosts released
+  within 150 steps (cyan 62% vs 97%, pink 55% vs 89%; no paired interval was computed).
+- **Oversampling training windows around phase ends did not fix it either.**
+  - In a matched pair fine-tuned on the same enlarged data (25% of each batch within ±8 steps of a phase end), the
+    145-step model ended 23 of 25 phases but too early: 2 of 19 scorable phases in range, median 84 steps.
+  - The 97-step model of that pair let phases run on: 0 of 9 in range, ended phases after 61-611 steps (median 202),
+    5 never ended.
+  - An earlier oversampling run with the 97-step reach on the original data had 0 of 10 in range: 5 early, 3 late,
+    2 never ended (median of those that ended: 83).
+  - The two parents of the matched pair differ (only the 97-step parent had an LR anneal), and each is one seed.
 
 ## The hidden-timer rule, tested on a synthetic game
 
@@ -196,7 +210,7 @@ blind observer. The strided model's result was the gate for training the second 
 
 | strided model | released [95% CI] | median timing error | on time | parked (of 622) |
 |---|---|---|---|---|
-| attempt 1, stopped at its 20k-step pilot | 0.49 [0.45, 0.53] | 86 | 0.04 | 320 |
+| attempt 1, stopped at its 20k-step pilot | 0.49 [0.44, 0.52] | 86 | 0.04 | 320 |
 | attempt 2 at 100k steps (reported only) | 0.68 [0.64, 0.72] | 65 | 0.03 | 200 |
 | **attempt 2 at 115k steps (the gate)** | **0.986 [0.976, 0.994]** | **12 [10, 13]** | 0.22 [0.18, 0.25] | 9 |
 | ideal observer with the same frames | 0.998 | 2 | 0.89 | - |
@@ -219,11 +233,15 @@ blind observer. The strided model's result was the gate for training the second 
 We ran DIAMOND's released Atari-100k Ms. Pac-Man world model in our harness, without retraining
 ([`eval/diamond_baseline.py`](eval/diamond_baseline.py), [`notes/diamond_baseline.md`](notes/diamond_baseline.md)).
 
-**The pre-registered prediction failed.** We predicted that DIAMOND's 4-frame context would park ghosts in at least
-10 of 30 rollouts. It parked in **0 of 30**.
+**The pre-registered prediction failed, and by its own terms that counts against the rule.** We predicted that
+DIAMOND's 4-frame context would park ghosts in at least 10 of 30 rollouts. It parked in **0 of 30**. The
+pre-registration said that a failure with 5 or more of the model's own ghost respawns "counts against the rule";
+DIAMOND had 6.
 
-**Why this does not test the rule either way.** Parking can only be measured while ghosts exist, and DIAMOND's ghosts
-vanish:
+**Our reading after the fact (post-hoc, not part of the registered test).** The criterion assumed ghosts survive long
+enough to be penned. Parking can only be measured while ghosts exist, and DIAMOND's ghosts vanish, so we think the
+test says little about timing. That is an argument made after seeing the result; the registered outcome stands as a
+failed prediction.
 
 ![ghost count over the rollout, relative to each model's own ground truth](docs/ghost_ratio.png)
 
@@ -233,12 +251,17 @@ vanish:
 | ours, 4 frames (Model 1) | 1.00 | 0.24 [0.13, 0.34] | 0.41 [0.25, 0.61] |
 | ours, strided (served) | 1.00 | 0.47 [0.25, 0.67] | 0.58 [0.30, 0.87] |
 
+The step-150 column rests on 3 episodes (9 rollouts) and the step-450 column on 4 episodes (12 rollouts), the ones
+where the comparison with the real game is defined; steps 1-15 use all 10. In the figure, each band covers the
+episodes whose real game shows ghosts in that bin: 10 in the first 60 steps, 3-9 after.
+
 - **The vanishing is not a detector artifact.** The detectors were rebuilt for DIAMOND's frame format. In the first
   15 steps they find 0.99 [0.97, 1.01] of the ghosts of DIAMOND's own ground truth in DIAMOND's generated frames, and
   3.86 ghosts per ground-truth frame where 4 should be visible. Later frames show the maze, pellets and Pac-Man
   intact, with no ghosts ([`eval/ghost_ratio_plot.py`](eval/ghost_ratio_plot.py)).
 - **Other metrics at 450 steps:** DIAMOND keeps the walls best (wall IoU 1.000 [0.995, 1.004] of its own ceiling). It
-  has higher Pac-Man error (25.3 px [19.1, 31.2]) and lower responsiveness (0.18 [0.13, 0.24]) than our served model.
+  has higher Pac-Man error (25.3 px [19.1, 31.2], over the 19 of 30 rollouts in which Pac-Man is still detected) and
+  lower responsiveness (0.18 [0.13, 0.24]) than our served model.
 
 **This is a reference point, not a head-to-head.** The two models differ in ways that favour ours on this test:
 
