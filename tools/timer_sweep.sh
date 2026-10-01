@@ -3,6 +3,7 @@
 # Resumable: a cell with a finished checkpoint (step == train.steps) is not retrained; a cell with a result JSON is
 # not re-scored. Runs JOBS cells at a time (the models are tiny). Logs: logs/timer/<layout>-N<N>.log
 #   cd /workspace/pacworld && JOBS=3 bash tools/timer_sweep.sh
+#   GRID=followup_grid JOBS=2 bash tools/timer_sweep.sh     # the follow-up cells (design section 10)
 set -uo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python
@@ -11,7 +12,8 @@ mkdir -p logs/timer
 cells=$($PY - <<'EOF'
 import yaml
 c = yaml.safe_load(open("configs/timer.yaml"))
-print(" ".join(f"{l}:{n}" for l, ns in c["grid"].items() for n in ns))
+import os
+print(" ".join(f"{l}:{n}" for l, ns in c[os.environ.get("GRID", "grid")].items() for n in ns))
 EOF
 )
 run_cell() {

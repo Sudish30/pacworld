@@ -46,7 +46,8 @@ def main():
     for k, v in (("steps", a.steps), ("batch_size", a.batch_size)):
         if v is not None:
             tr[k] = v
-    if a.N not in cfg["grid"][a.layout]:
+    cells = cfg["grid"].get(a.layout, []) + cfg.get("followup_grid", {}).get(a.layout, [])
+    if a.N not in cells:
         raise SystemExit(f"N={a.N} is not a pre-registered cell of {a.layout}")
     offsets = cfg["layouts"][a.layout]
     torch.manual_seed(a.seed)

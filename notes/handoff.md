@@ -98,6 +98,18 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## PRE-REGISTERED 2026-10-01, before any run: part b attempt 2 and the part a follow-up (`notes/timer_rule_design.md` sections 10-11)
+- **Part b attempt 2** (section 11): the full runs as designed, same bars (P-S: release ≥ 0.898 and median ≤ 5; P-C:
+  on-time ≤ 0.251). pac-S10 resumes from its 20k checkpoint and runs first; **P-S is the gate**. If it fails, part b
+  stops for good and pac-C10 is not trained. At most about $5 on a 4090.
+- **Part a follow-up** (section 10): layout S10b = S10 with −81 moved to −80; cells N=80 (on-frame) and N=72, 79, 88
+  (off-frame). Owner's prediction: on-frame passes R1, off-frame cells park (release below the R2 bar).
+  - I0 (before training): N=80 on-time 0.716 (bar 0.616); release bars 0.798 (N=72), 0.494 (N=79), 0.774 (N=88).
+  - The ideal observer expects the mid-gap cells (72, 88) to release in about 0.9 of starts, so they separate the
+    owner's prediction from the observer's.
+  - Under $0.50 on the RTX 2000 Ada. `GRID=followup_grid bash tools/timer_sweep.sh`, then
+    `tools/timer_followup_verdict.py`.
+
 ## OWNER DECISIONS (2026-10-01) and README done
 - **Run order:** README -> 4b attempt 2 -> 4a follow-up -> LAM v2 pilot. Balance $24.66, floor $10.
 - **LAM v2 entropy weight:** fine as registered; record the pod's value at step 1.

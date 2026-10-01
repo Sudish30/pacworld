@@ -28,11 +28,15 @@ layouts:
   C4: [-4, -3, -2, -1]
   C10: [-10, -9, -8, -7, -6, -5, -4, -3, -2, -1]
   S10: [-97, -81, -65, -49, -33, -17, -4, -3, -2, -1]
+  S10b: [-97, -80, -65, -49, -33, -17, -4, -3, -2, -1]   # follow-up (design section 10): S10 with -81 moved to -80
 
 grid:                                  # the 23 pre-registered cells
   C4: [3, 8, 17, 33, 65]
   C10: [3, 8, 10, 17, 33, 65, 97, 200]
   S10: [3, 8, 17, 24, 33, 65, 80, 97, 145, 200]
+
+followup_grid:                         # the 4 cells of the follow-up (design section 10); scored by tools/timer_followup_verdict.py
+  S10b: [72, 79, 80, 88]               # 80 = on a frame; 72, 79, 88 = between frames
 
 model:                                 # pacworld's UNet, small and unconditional
   widths: [64, 128]                    # 16 -> 8 px

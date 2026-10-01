@@ -98,8 +98,9 @@ def main():
     a = p.parse_args()
     cfg = load_config(ROOT / a.config)
     g, e = cfg["game"], cfg["eval"]
-    if a.N not in cfg["grid"][a.layout]:
-        raise SystemExit(f"N={a.N} is not a pre-registered cell of {a.layout}: {cfg['grid'][a.layout]}")
+    cells = cfg["grid"].get(a.layout, []) + cfg.get("followup_grid", {}).get(a.layout, [])
+    if a.N not in cells:
+        raise SystemExit(f"N={a.N} is not a pre-registered cell of {a.layout}: {cells}")
     offsets = cfg["layouts"][a.layout]
     N = a.N
     t0 = time.time()

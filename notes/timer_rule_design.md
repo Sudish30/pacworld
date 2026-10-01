@@ -242,3 +242,88 @@ release timer**.
 - **P-D0** = the 64px detector's release equals that truth for 100% of starts. Sample: 310/310.
 - Also from the sample: episodes last a median 420 steps (p10 348); 56% of stays begin ≥ 100 steps into their
   episode.
+
+## 10. Part a follow-up: does a frame exactly at −N fix the N=80 failure? PRE-REGISTRATION (2026-10-01, before any follow-up model trains)
+
+**Question.** In part a, S10 at N=80 parked in 37 of 60 starts. S10 has frames at −81 and −65, so −80 falls between
+two frames. The owner's explanation: periods on a frame are timed, periods between frames park.
+
+**One variable.** A new layout **S10b** = S10 with the frame at −81 moved to −80:
+`[-97, -80, -65, -49, -33, -17, -4, -3, -2, -1]`. Same reach (97), same number of frames, same game, model, 15k
+steps, seed 0, test starts and scoring as part a. ("More steps" is a different variable and is not tested.)
+
+**Cells** (`followup_grid` in `configs/timer.yaml`):
+- **N=80**: on a frame in S10b.
+- **N=72, 79, 88**: fresh periods between frames of S10b. 72 is mid-gap between −80 and −65; 79 is at the far end of
+  that gap, one step short of the −80 frame (the analogue of N=80 in S10); 88 is mid-gap between −97 and −80.
+
+**D0 and I0, computed before any model trains** (`eval/timer_eval.py --ideal-only`; D0 passes in all four):
+
+| cell | ideal on-time (tol 2) | ideal release | ideal median \|lag − N\| | bar |
+|---|---|---|---|---|
+| S10b N=80 (on-frame) | 0.716 | 1.000 | 0 | R1: on-time ≥ min(0.80, 0.716 − 0.10) = **0.616** |
+| S10b N=72 (off-frame) | 0.317 | 0.898 | 4 | R2: release ≥ **0.798** and median ≤ 7 |
+| S10b N=79 (off-frame) | 0.120 | 0.594 | 12 | R2: release ≥ **0.494** and median ≤ 15 |
+| S10b N=88 (off-frame) | 0.254 | 0.874 | 5 | R2: release ≥ **0.774** and median ≤ 8 |
+
+**Scoring: as part a** (`tools/timer_followup_verdict.py`, written before any result). R1 for the on-frame cell, R2
+for the off-frame cells. A cell **parks** if its release fraction is below its R2 release bar. Point estimates decide;
+bootstrap CIs over test episodes are reported.
+
+**The owner's prediction, committed before running: the on-frame period passes, the off-frame periods park.**
+- **SUPPORTED**: N=80 passes R1 and all three off-frame cells park.
+- **PARTLY SUPPORTED**: N=80 passes R1 and one or two off-frame cells park.
+- **ON-FRAME ONLY**: N=80 passes R1 and no off-frame cell parks.
+- **NOT SUPPORTED**: N=80 fails R1. Then the missing frame was not what broke N=80 in S10.
+
+**Where the ideal observer disagrees with that prediction (noted before running).**
+- The observer does not park in every gap. It releases in about 0.9 of starts mid-gap (N=72, 88) and in only 0.59 at
+  the far end of a gap (N=79), because there it has no room to overshoot.
+- Part a already showed two gap cells that did not park (S10 at N=8 and N=24, both passing R2).
+- So the observer predicts "N=79 at risk, N=72 and 88 release", and the owner's prediction is "all three park". The
+  mid-gap cells separate the two.
+
+**Pre-spend check.**
+- (a) Most likely failures: N=80 still parks with a frame at −80 (then far frames are simply hard at this budget, as
+  at N=97); or the mid-gap cells release, which contradicts the prediction but agrees with the observer.
+- (b) Cheapest test: the pipeline and both layout families already ran in part a; D0 and I0 above cost $0. No smaller
+  GPU test exists than the four cells themselves.
+- (c) Differences from part a: the layout only.
+- **Cost:** 4 cells x 15k steps on the RTX 2000 Ada ($0.24/h), about 1.5 GPU-hours, **under $0.50**.
+
+## 11. Part b, attempt 2. PRE-REGISTRATION (2026-10-01, before any attempt-2 training)
+
+**History.** Attempt 1 stopped at its registered pilot: pac-S10 at 20k steps released in 0.486 of 622 val starts,
+below the 0.50 bar. That is reported as a stopped pilot and is not re-scored. No part-b criterion (P-S, P-C, P-R) has
+been scored.
+
+**What attempt 2 is** (the owner's decision): the full runs exactly as designed in section 9 + Amendment 1, with the
+same data, split, models, seeds, measurement and bars. The only difference from attempt 1 is that the 20k-step pilot
+rule is not applied again.
+- **pac-S10** continues from the pilot's 20k-step checkpoint (`--resume`) to 100k steps, then the 15k-step anneal.
+  This is the continuation section 9 planned.
+- **pac-C10**: 100k steps, then the 15k-step anneal.
+
+**Bars, unchanged** (numbers from P-I0, committed in d88bff5 / 894acd9):
+- **P-S** (pac-S10-ft-uniform): release fraction ≥ **0.898** and median |lag − truth| ≤ **5**.
+- **P-C** (pac-C10-ft-uniform): on-time fraction ≤ **0.251**.
+- **P-R**: P-D0 (passed, 622/622), P-S and P-C all pass.
+
+**Order and gate.**
+1. Train and score pac-S10 first. **P-S is the gate.**
+2. If P-S fails: **part b stops for good.** pac-C10 is not trained, and P-R is reported as failed.
+3. If P-S passes: train and score pac-C10, then P-C and P-R.
+
+Reported, not gating: pac-S10 scored at 100k steps (before the anneal); C10's parking rate; early releases.
+
+**Pre-spend check.**
+- (a) Most likely failure: pac-S10 still parks after 115k steps. At 20k it parked in 51% of starts and was late in
+  the rest. Random play gives short episodes (median 420 steps), so 20.8% of training windows have a clamped far
+  frame, and the stay sits between frames (−33 and −49) of this layout.
+- (b) Cheapest test: the 20k pilot was that test, and it failed. No cheaper test of "does it learn by 115k" exists
+  than training S10 first, which is why C10 waits for P-S. That saves about half the cost on a failure.
+- (c) Differences from section 9: none in data, model or scoring. The S10 run is resumed once (new random stream for
+  batch sampling after the resume), and the pilot gate is dropped.
+- **Cost** on an RTX 4090 ($0.74/h, 9.0 it/s measured): S10 needs 95k more steps, about 2.9 GPU-hours, **about $2.2**.
+  C10 needs 115k steps, about 3.6 GPU-hours, **about $2.6**, spent only if P-S passes. Total at most **about $5**
+  with scoring.
