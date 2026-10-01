@@ -6,8 +6,8 @@
 \usepackage[numbers]{natbib}
 \newcommand{\todo}[1]{\textcolor{red}{\textbf{TODO:} #1}}
 
-\title{A Diffusion World Model Times a Hidden Event Only Where a Context Frame Sits:\\
-A Pre-registered Study on Ms.~Pac-Man}
+\title{Hidden Timers and Context Offsets in a Diffusion World Model of Ms.~Pac-Man:\\
+A Pre-registered Study}
 \author{Sudish Mulakala}
 \date{Draft, \today}
 
@@ -25,8 +25,8 @@ difference to 4 frames $-0.57$, 95\% CI $[-0.77,-0.37]$ over episodes).
 We state a rule: a model can time a hidden event of period $N$ only as precisely as its context offsets resolve $-N$.
 In a pre-registered sweep of 23 small models on a synthetic game, scored against an ideal observer limited to the same
 offsets, the rule holds \emph{partially}: no model times a period beyond its reach, and models with a frame exactly
-at $-N$ match the observer at three of four long periods, but a period between two frames parks. A pre-registered
-follow-up changes one offset: moving a frame from $-81$ to $-80$ takes the $N{=}80$ model from parking in 37 of 60
+at $-N$ match the observer at three of four long periods, but a period between two frames parks. A follow-up,
+pre-registered after that result, changes one offset: moving a frame from $-81$ to $-80$ takes the $N{=}80$ model from parking in 37 of 60
 starts to parking in none, while three periods between frames of the new layout park more than the observer allows
 (one of them by a single start).
 On a second real game (the 2600 Pac-Man) the registered test failed: the strided model releases the ghost in 0.99
@@ -133,7 +133,10 @@ error ($-0.5$ px $[-2.7,+1.3]$); only responsiveness improves ($+0.071$ $[+0.014
 \paragraph{The second timer is not solved.} The frightened timer (124--134 steps) exceeds the 97-step reach.
 \begin{itemize}
 \item No model ends frightened phases on time.
-\item A 145-step-reach model (13 frames) ended them too early, and weakened the pen timer that 10 frames had fixed.
+\item A 145-step-reach model (13 frames) did not fix it: of 15 phases, 8 never ended and none ended within 124--134
+steps. It also weakened the pen timer that 10 frames had fixed (median longest stay 110 vs 82).
+\item Oversampling training windows around phase ends made phases end, but too early: 0 of 10 in range with the
+97-step reach (median 83 steps), 2 of 19 with the 145-step reach (median 84).
 \item Teacher-forced analysis shows every model copies the phase end one step after it appears in a real frame, instead
 of predicting it. The phase end is a one-frame event about once per episode, which the denoising loss barely rewards.
 \end{itemize}
@@ -238,7 +241,10 @@ The S10 layout has frames at $-81$ and $-65$, so $N{=}80$ falls between two fram
 pre-registered one follow-up before running it. The single change is the layout \textbf{S10b}: S10 with the frame at
 $-81$ moved to $-80$ (same reach, same frame count; same game, model, steps, seed, starts and scoring). The registered
 prediction: the on-frame period ($N{=}80$) passes R1, and periods between frames of S10b ($N{=}72$, 79, 88) \emph{park},
-defined as a release fraction below the R2 release bar. The ideal observer, computed first, disagreed in part: it
+defined as a release fraction below the R2 release bar. This is not the original rule's prediction. The rule,
+written before the sweep, said that between two frames the timing is \emph{spread over the gap}; the sweep instead
+showed parking at $N{=}80$, and the follow-up's prediction was registered after seeing that. It therefore tests an
+explanation suggested by the sweep. The ideal observer, computed first, disagreed in part: it
 releases in about 0.9 of starts mid-gap ($N{=}72$, 88) and in 0.59 at the end of a gap ($N{=}79$).
 
 \begin{table}[h]

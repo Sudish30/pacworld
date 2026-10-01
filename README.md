@@ -104,9 +104,14 @@ resolution-invariant.
 
 ### The second timer is not solved
 
-The frightened phase lasts 124-134 steps, beyond the 97-step reach. No model ends it on time. A model with a 145-step
-reach ended frightened phases too early and weakened the pen timer. Three pre-registered attempts to fix it failed;
-they are in the handoff.
+The frightened phase lasts 124-134 steps, beyond the 97-step reach. No model ends it on time. Three pre-registered
+attempts to fix it failed; the details are in the handoff.
+
+- **A longer reach alone (145 steps, 13 frames) did not fix it.** Of 15 frightened phases, 8 never ended and none
+  ended in the real 124-134 range; the 7 that ended did so after 7-9 or 168-474 steps. It also weakened the pen
+  timer (median longest pen stay 110, against 82 for the 97-step model).
+- **Oversampling training windows around phase ends made phases end, but too early.** With the 97-step reach, 0 of
+  10 phases ended in range (median of those that ended: 83 steps). With the 145-step reach, 2 of 19 did (median 84).
 
 ## The hidden-timer rule, tested on a synthetic game
 
@@ -160,6 +165,11 @@ The per-cell table is in the handoff and the paper draft.
 Pre-registered after the sweep, before it ran. One variable changed: the strided layout's frame at −81 was moved to
 −80 (same reach, same number of frames). The prediction: a period that lands on a frame passes, and periods between
 frames park. **Verdict: supported, as registered.**
+
+**This prediction is not the original rule's.** The rule above, written before the sweep, said that between two
+frames the timing is "spread over that gap". The sweep showed something else at N = 80: the model parked. The
+follow-up's "between frames park" prediction was registered after seeing that result, so it tests an explanation
+suggested by the sweep, not a prediction made before any data.
 
 | period N | where −N falls | on time | released [95% CI] | ideal observer releases | parked | result |
 |---|---|---|---|---|---|---|
@@ -298,9 +308,16 @@ paper/               LaTeX draft of the write-up
 
 ```bash
 python -m venv .venv && source .venv/bin/activate    # Python 3.12
+# On a CUDA machine, install the CUDA 13 build of PyTorch first (the build the runs here used):
+pip install torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130
 pip install -r requirements.txt
 python smoke_test.py                                 # checks ALE/MsPacman-v5 runs
 ```
+
+Install status: a fresh environment built from `requirements.txt` on a Mac (CPU build of PyTorch) installs cleanly,
+runs `smoke_test.py`, and resolves every import in the repo. The full GPU install has not been tested from scratch;
+the pinned versions are the ones that ran on the training machine. `eval/diamond_baseline.py` additionally needs
+DIAMOND's source and weights, which are not part of this repo.
 
 Every script takes `--seed`, reads its hyperparameters from a config in `configs/`, and every training run logs
 to wandb (`--wandb-mode disabled` to turn that off).

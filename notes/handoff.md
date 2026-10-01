@@ -98,6 +98,22 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## PUSHED to `origin/main` (2026-10-01), after the owner cleared the README
+- The repo `Sudish30/pacworld` is **public** (`gh repo view`). The owner approved pushing everything.
+- Last fixes before the push:
+  - paper title softened to "Hidden Timers and Context Offsets in a Diffusion World Model of Ms. Pac-Man";
+  - README and paper now say that the follow-up's "between frames park" prediction was registered after the sweep
+    showed parking, and that the original rule had predicted timing "spread over that gap";
+  - the frightened-timer sentence corrected to this file's records: r148 (reach 145) had 8 of 15 phases never end and
+    none in 124-134; the event-diet runs ended phases early (median 83 with reach 97, 84 with reach 145);
+  - install instructions give the CUDA 13 PyTorch index (`https://download.pytorch.org/whl/cu130`, wheel
+    `torch-2.14.0+cu130` confirmed present).
+- **Fresh-install test on the Mac ($0):** new Python 3.12 venv, `pip install -r requirements.txt` (CPU torch 2.14.0
+  from PyPI), `smoke_test.py` passes, and every third-party import in the repo resolves except DIAMOND's own
+  `models` / `utils` (external source, only for `eval/diamond_baseline.py`). The GPU install is untested from scratch,
+  and the README says so.
+- `paper/main.pdf` is deliberately not committed until related work is written.
+
 ## OWNER DECISIONS after the stops (2026-10-01) and what was done
 - **Learned controls are closed. No v3.** v1 and v2 are reported as negative results with their mechanisms.
 - **README updated for the owner's review** (not pushed): an "In short" section; "a major long-horizon failure";
