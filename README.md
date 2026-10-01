@@ -35,10 +35,11 @@ the actions, at 64x64. Everything else in the repo exists to answer one question
 inside it before the world stops making sense?*
 
 **The main finding: a major long-horizon failure is hidden timers.** (Ghosts are also lost to sampler drift and
-around life losses; those are separate failures.) Ms. Pac-Man runs clocks the screen does not show: how long ghosts stay in the pen after a death (up to 91 steps), and how long a power pellet lasts (124-134
-steps). A model that sees only its last 4 frames cannot observe them, so it parks the ghosts in the pen. A context
-with the same kind of frames but a longer *reach* (4 recent frames plus 6 frames 16 steps apart, spanning 97 steps)
-removes the parking. The frightened-phase timer is still unsolved.
+around life losses; those are separate failures.) Ms. Pac-Man runs clocks the screen does not show: how long ghosts
+stay in the pen after a death (up to 91 steps), and how long a power pellet lasts (124-134 steps). A model that sees
+only its last 4 frames cannot observe them, so it parks the ghosts in the pen. A context with the same kind of
+frames but a longer *reach* (4 recent frames plus 6 frames 16 steps apart, spanning 97 steps) removes the parking.
+The frightened-phase timer is still unsolved.
 
 **How the work was done.** Every experiment was pre-registered: its pass/fail criteria were committed before its
 results existed, and failed predictions are reported as failures. Confidence intervals are 95% bootstrap intervals
@@ -122,10 +123,10 @@ before any synthetic run; "offsets" are how many steps back each context frame s
 
 The rule was written after the Ms. Pac-Man pen results above and before the synthetic test below.
 
-**The test** ([`timer_game.py`](timer_game.py)). A 16x16
-game holds a ghost in a pen for exactly N frames with nothing on screen showing the elapsed time. 23 small models
-cross three context layouts (4 consecutive, 10 consecutive, and the strided 10-frame layout) with N from 3 to 200.
-Each is compared with an *ideal observer* limited to the same context offsets, computed before any model trained.
+**The test** ([`timer_game.py`](timer_game.py)). A 16x16 game holds a ghost in a pen for exactly N frames with
+nothing on screen showing the elapsed time. 23 small models cross three context layouts (4 consecutive, 10
+consecutive, and the strided 10-frame layout) with N from 3 to 200. Each is compared with an *ideal observer* limited
+to the same context offsets, computed before any model trained.
 
 **Verdict, as pre-registered: the rule holds PARTIALLY. Reach is necessary but not sufficient.**
 
