@@ -28,3 +28,11 @@ pairs:                           # paired differences (b - a) on the same episod
   - [model1, diamond]            # external baseline vs our 4-frame model (different data, preprocessing, training)
   - [ft-uniform, diamond]        # external baseline vs our served model
 out: eval/results/stats
+ghost_ratio_plot:                # eval/ghost_ratio_plot.py: ghost count / the run's own ground truth over the rollout
+  runs: {diamond: "DIAMOND (released, 4 frames)", model1: "ours, 4 frames (Model 1)", ft-uniform: "ours, strided (served)"}
+  bin: 30                        # steps per point
+  horizon: 450
+  early_steps: 15                # detector check: the ratio over the first steps must be near 1 for every run
+  bootstrap: 2000
+  out_png: docs/ghost_ratio.png
+  out_json: eval/results/stats/ghost_ratio.json

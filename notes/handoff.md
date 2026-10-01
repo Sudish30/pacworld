@@ -46,9 +46,9 @@ Recorded 2M more steps (`record.py --seed 43`, 3527 episodes / 2,001,949 steps i
 
 | run | pod | id | ssh | started (UTC) | speed | ETA (UTC) |
 |---|---|---|---|---|---|---|
-| `m1-2M-ctx4` | pod 1 (existing) | `rs4lbyjavmcqdz` | `ssh -p 11398 -i ~/.ssh/id_ed25519 root@213.173.107.231` | Sep 17 23:47 | 9.4 it/s | ~02:50 |
-| `m1-2M-ctx8` | pod 2 `pacworld-pod2` | `k3oc3lr3hdyyf3` | `ssh -p 11581 -i ~/.runpod/ssh/runpodctl-ssh-key root@213.173.98.97` | Sep 18 01:02 | 6.0 it/s | ~05:50 |
-| `m1-2M-ctx6s16` | pod 3 `pacworld-pod3` | `p3pd9oyirbcmyu` | `ssh -p 12364 -i ~/.runpod/ssh/runpodctl-ssh-key root@213.173.98.90` | Sep 18 00:59 | 5.3 it/s | ~06:15 |
+| `m1-2M-ctx4` | pod 1 (existing) | `rs4lbyjavmcqdz` | `ssh -p <port> -i ~/.ssh/id_ed25519 root@<pod-ip>` | Sep 17 23:47 | 9.4 it/s | ~02:50 |
+| `m1-2M-ctx8` | pod 2 `pacworld-pod2` | `k3oc3lr3hdyyf3` | `ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<pod-ip>` | Sep 18 01:02 | 6.0 it/s | ~05:50 |
+| `m1-2M-ctx6s16` | pod 3 `pacworld-pod3` | `p3pd9oyirbcmyu` | `ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<pod-ip>` | Sep 18 00:59 | 5.3 it/s | ~06:15 |
 
 Pods 2 and 3: secure-cloud RTX 4090, 83 GB RAM, 16 vCPU, 40 GB volume, $0.74/h each, same image as pod 1, repo at commit `4bc516a` (cloned from a git bundle; GitHub is private), raw data rsynced from pod 1 (352 + 3527 episodes, no cache copied), cache rebuilt there, val split verified byte-identical to pod 1 and to commit `a7ea0d5` (sha256 `7ba75f89...`), window checks and a 150-step smoke run passed before launch (`logs/bootstrap.log` on each pod). They are ~35% slower than pod 1 (GPU shows 93% util but only 200-225 W vs pod 1; pod 3's host is also heavily loaded, pod 2's is not, so the cause is the host/GPU, not our code); results are unaffected, only wall time. Overall finish: all three checkpoints on pod 1 by ~06:15 UTC Sep 18 (vs ~10:00 with the sequential queue). On pod 1 the queue script was told to skip ctx8 and ctx6s16 via `logs/m1-2M-ctx8.done` / `logs/m1-2M-ctx6s16.done` marker files (created 00:15 UTC, before either run existed there), so it exits after ctx4; nothing runs twice (wandb shows one run per name).
 
@@ -59,7 +59,7 @@ Pods 2 and 3: secure-cloud RTX 4090, 83 GB RAM, 16 vCPU, 40 GB volume, $0.74/h e
 **Morning checklist.**
 1. `runpodctl pod list` on the Mac: pods 2 and 3 should be EXITED/stopped; if one is still RUNNING, read `logs/sync_<run>.log` on it.
 2. On pod 1: `ls checkpoints/m1-2M-*/ logs/*.done` should show all three EMA checkpoints and done markers; `tail -n 2 logs/m1-2M-*.log` should show three `done: 100000 steps` lines.
-3. If a remote run did not sync, by hand from the Mac: `ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<host> 'cd /workspace/pacworld && bash -c "source /etc/rp_environment; tail -5 logs/sync_*.log"'`, then re-run the sync part: `rsync -a -e "ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key" root@<host>:/workspace/pacworld/checkpoints/<run>/ /tmp/<run>/` and push it to pod 1, or run `tools/pod_run_and_sync.sh <run> 213.173.107.231 11398` again on the pod (it resumes from the last checkpoint if training was interrupted).
+3. If a remote run did not sync, by hand from the Mac: `ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<host> 'cd /workspace/pacworld && bash -c "source /etc/rp_environment; tail -5 logs/sync_*.log"'`, then re-run the sync part: `rsync -a -e "ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key" root@<host>:/workspace/pacworld/checkpoints/<run>/ /tmp/<run>/` and push it to pod 1, or run `tools/pod_run_and_sync.sh <run> <pod-ip> <port>` again on the pod (it resumes from the last checkpoint if training was interrupted).
 4. Stop billing: `runpodctl pod stop <id>` for anything still running, then `runpodctl pod remove <id>` for pods 2 and 3 once their checkpoints are confirmed on pod 1 (this deletes their volumes). Revoke the API key afterwards; it is also stored in `~/.runpod/config.toml` on pods 2 and 3 and in their pod env.
 5. Then evaluate each run on pod 1 with `eval/eval_rollouts.py` pointed at `checkpoints/<run>/model1_ema.pt` (the predictor reads the checkpoint's own context layout) and `eval/pen_timer_analysis.py` for the timer question.
 
@@ -87,7 +87,7 @@ Same 10 held-out episodes x 3 seeds, start step 100, 3-step Euler, ctx sigma 0, 
 - **10x data helps everything else**: Pac-Man error and responsiveness improve for all three runs; ctx6s16 halves the 450-step Pac-Man error (13.7 vs 19.5 px).
 - **Not solved**: ghost count at 450 is still ~2 of 4 for every model. In ctx6s16 the remaining loss is *not* the pen: released ghosts detect at 51% (Model 1: 20%), but never-penned ghosts drop to 81% (Model 1: 90%) and ghost mass is 47% at step 450. Pen occupancy at 131-250 is still high (0.79 vs 0.46), i.e. it releases on time but sends ghosts back too readily or holds the first release. Next diagnostics: where the never-penned ghosts go in ctx6s16 (fade vs re-pen), and the 10-step sampler (ctx8 recovers to 70% mass with 10 steps).
 - **Regressions**: ctx6s16 wall IoU 0.952 vs 0.958 and Pac-Man error at 15 steps 1.9 vs 1.8 px - small and within one std; pellet IoU unchanged. Nothing else regressed.
-- Demo serves m1-2M-ctx6s16-ft-uniform since 2026-09-20 (before that ctx6s16), on pod `pacworld-eval3` (`o9dpam9ppg0u6o`, `ssh -p 23413 -i ~/.runpod/ssh/runpodctl-ssh-key root@213.173.110.223`; the earlier pods were terminated at zero balance; host/port change if the pod restarts; create pods with `--min-cuda-version 13.0`), 15 fps, 28.7 ms p50, ctx sigma 0.01; Model 1 remains at `checkpoints/model1_ema.pt`. To serve another checkpoint: `serve/server.py --checkpoint checkpoints/m1-2M-ctx6s16/model1_ema.pt` (the server seeds a 97-frame history from the val episode, so the first frames of a session match training).
+- Demo serves m1-2M-ctx6s16-ft-uniform since 2026-09-20 (before that ctx6s16), on pod `pacworld-eval3` (`o9dpam9ppg0u6o`, `ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<pod-ip>`; the earlier pods were terminated at zero balance; host/port change if the pod restarts; create pods with `--min-cuda-version 13.0`), 15 fps, 28.7 ms p50, ctx sigma 0.01; Model 1 remains at `checkpoints/model1_ema.pt`. To serve another checkpoint: `serve/server.py --checkpoint checkpoints/m1-2M-ctx6s16/model1_ema.pt` (the server seeds a 97-frame history from the val episode, so the first frames of a session match training).
 
 ## What the residual ghost loss of ctx6s16 is made of (`eval/residual_ghosts.py`, 2026-09-18; CSVs in `eval/results/<run>/ghost_diag/residual_*.csv`)
 Inference-free, from the saved eval frames; both worlds measured with one pixel criterion (pen zone calibrated on ground truth: 99.7% / 0.0% agreement with RAM).
@@ -97,6 +97,29 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **The "gone" part** = in-maze disappearances (detected outside the pen, then absent 15+ steps; ground truth has 12 such events, ctx6s16 243). 65% sit at the model's own life losses (death animation + reset, legitimate). The other 85 events cost 0.43 ghosts/step and 40% of them are permanent, so they accumulate (55 of 85 fall in steps 251-450). Triggers: next to Pac-Man 35%, tunnel edge 16%, overlapping another ghost 14%, reappearing inside the pen 18% (eaten-like). 26% are followed by frightened-blue sprites, i.e. the model's own power-pellet phases (Model 1 never renders blue ghosts: 0%); 11 of those never turn back into coloured ghosts within the window - possibly a second hidden timer (frightened duration), not yet tested.
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
+
+## OWNER DECISIONS (2026-10-01) and README done
+- **Run order:** README -> 4b attempt 2 -> 4a follow-up -> LAM v2 pilot. Balance $24.66, floor $10.
+- **LAM v2 entropy weight:** fine as registered; record the pod's value at step 1.
+- **DIAMOND:** reported as a failed prediction, not redefined. Presented as a reference point, not a head-to-head.
+- **4b attempt 2:** the full 115k-step run as originally designed, same bars, own pre-registration and pre-spend note.
+  The first pilot stays reported as a stopped pilot. If the gate fails again, 4b stops for good.
+- **4a follow-up:** ONE follow-up on the between-frames explanation: a layout with a frame exactly at −80, plus a few
+  fresh periods that fall between frames of the new layout (same reach, one variable changed). Prediction committed
+  before running: on-frame periods pass, off-frame periods park. Same scoring. Not "more steps".
+- **Pod IPs and SSH ports stay out of committed files.** They were replaced by `<pod-ip>` / `<port>` in this file and
+  in `tools/pod_bootstrap.sh`; get the current values from `runpodctl pod get <pod id>`. Older commits still contain
+  the old ones (all those pods are terminated or restarted since); removing them needs a history rewrite, which is
+  the owner's call.
+- **README rewritten** (no GPU): results with episode CIs, the two non-significant claims softened, the timer rule
+  with the PARTIAL verdict, DIAMOND, LAM v1 as a negative result. No claims about 4b or LAM v2.
+  - **Still missing: the demo GIF.** No world-model checkpoint is on the Mac; it will be made on the pod during the
+    next pod job (CPU only).
+- **DIAMOND detector check** (`eval/ghost_ratio_plot.py`, `docs/ghost_ratio.png`, `eval/results/stats/ghost_ratio.json`):
+  - ghosts detected in DIAMOND's generated frames / its own ground truth over steps 1-15: **0.990 [0.974, 1.006]**
+    (ours: 1.001 and 1.000), so the later vanishing is not a detector artifact;
+  - the detector finds 3.86 ghosts per gated ground-truth frame in DIAMOND's format (ours 3.98);
+  - last 30-step bin (421-450): DIAMOND 0.086, Model 1 0.424, served 0.669.
 
 ## LAM v2 PRE-REGISTERED (2026-10-01): `notes/lam_v2_design.md`, approved by the owner with changes; no GPU run yet
 - **Run order (owner):** README -> 4b attempt 2 -> 4a follow-up -> LAM v2 pilot.
@@ -299,11 +322,11 @@ includes volume storage). No pod is running.
   volume.
 - No RTX PRO 4500 or RTX 4090 with a CUDA 13 host was free in EU-RO-1.
 - New pod **`e6ip83c50b2gr0` (`pacworld-timer`)**: RTX 2000 Ada, 16 GB, driver 580, 48 vCPU, **$0.24/h**, volume
-  attached. SSH `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p 35193 root@213.173.110.197`.
+  attached. SSH `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p <port> root@<pod-ip>`.
 - The volume's venv works (torch 2.14.0+cu130, CUDA available). Code checksums match the Mac.
 - Balance before starting it: $27.13.
 - **Second pod `th9dydo5fauw33` (`pacworld-partb`): RTX 4090, $0.74/h, on the same network volume.** Two pods can
-  share the volume. SSH `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p 31141 root@213.173.98.97`.
+  share the volume. SSH `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p <port> root@<pod-ip>`.
 - Part b needs it: the 18.8M UNet ran below 0.7 it/s on the shared RTX 2000 Ada and slowed the timer sweep. On the
   4090 it runs at 9.0 it/s.
 - The timer sweep stays on `e6ip83c50b2gr0`. Balance before creating it: $26.60.
@@ -406,7 +429,7 @@ then Stage 1. The treatment of DIAMOND's P-D1 remains the owner's decision.
 - **Pod** `pacworld-lam` (`d9qr7fnu01zu9m`): RTX PRO 4500 Blackwell 32 GB, 12 vCPU, 62 GB RAM, $0.72/h, EU-RO-1,
   network volume attached. No RTX 4090 with a CUDA 13 host was in stock in EU-RO-1, and the volume cannot leave the
   region. Image `runpod/pytorch:1.0.3-cu1281-torch291-ubuntu2404`, with port 22 published after creation. SSH:
-  `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p 40637 root@213.173.102.27`; the host and port change if the pod restarts.
+  `ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p <port> root@<pod-ip>`; the host and port change if the pod restarts.
 - The volume's venv works unchanged: torch 2.14.0+cu130 with CUDA available.
 - Code is synced from the Mac by `rsync -rlptz` (never `-a`; the network filesystem rejects chown). Checksums of the
   key files match the Mac; the split sha256 is `7ba75f8952e767b3`.
@@ -512,8 +535,8 @@ long-horizon coherence, not designs):
   - The two `RUNPOD_API_KEY` hits are an environment-variable *reference* in `tools/pod_run_and_sync.sh`.
   - `.gitignore` covers `wandb/`, `.env*`, `.hf_cache/` and `data/`.
   - **Infrastructure details in history** (not secrets; all the pods listed are terminated):
-    - pod IPs and SSH ports: 213.173.107.231:11398, 213.173.98.97:11581, 213.173.98.90:12364, 213.173.110.204:32325,
-      213.173.110.223:23413;
+    - pod IPs and SSH ports: <pod-ip>:<port>, <pod-ip>:<port>, <pod-ip>:<port>, <pod-ip>:<port>,
+      <pod-ip>:<port>;
     - pod IDs: rs4lbyjavmcqdz, k3oc3lr3hdyyf3, p3pd9oyirbcmyu, rc01tj2rm162if, o9dpam9ppg0u6o;
     - network volume `v3kyag5rhv`;
     - the wandb entity `smulakala06-san-jose-state-university`.
@@ -911,7 +934,7 @@ Not gating: ghost count ORIGINAL / FAIR gating - steps 131-250: 2.99 / 3.55 (ctx
 **Decision rule:** switch the demo to the fine-tuned checkpoint only if P1, P2 and every forgetting-gate item pass; otherwise leave the demo on ctx6s16 and report.
 
 ## VERDICT on the m1-2M-ctx-r148 prediction (scored 2026-09-19 20:45 UTC against the text committed in 3681555): FALSIFIED - demo stays on ctx6s16
-Run finished cleanly (step 100000 at 11:52 UTC, 245 min, val denoise 0.00058, all weights finite; checkpoint sha256 31f6c6ac...). Evaluated on pod `pacworld-eval3` (`o9dpam9ppg0u6o`, `ssh -p 23413 -i ~/.runpod/ssh/runpodctl-ssh-key root@213.173.110.223`) after the previous pod was terminated at zero balance (~16:15 UTC). Results: `eval/results/m1-2M-ctx-r148/`, `eval/results/compare_r148.csv`, `logs/eval_r148.log`.
+Run finished cleanly (step 100000 at 11:52 UTC, 245 min, val denoise 0.00058, all weights finite; checkpoint sha256 31f6c6ac...). Evaluated on pod `pacworld-eval3` (`o9dpam9ppg0u6o`, `ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<pod-ip>`) after the previous pod was terminated at zero balance (~16:15 UTC). Results: `eval/results/m1-2M-ctx-r148/`, `eval/results/compare_r148.csv`, `logs/eval_r148.log`.
 
 | prediction | ctx6s16 | r148 | verdict |
 |---|---|---|---|
@@ -926,7 +949,7 @@ Ghost count, ORIGINAL gating / FAIR gating (own respawns dropped, blue = present
 ## (finished - see the verdict above) Run: `m1-2M-ctx-r148` (launched 2026-09-19 ~07:50 UTC on `pacworld-eval2`, tmux `train2m`) - PREDICTION WRITTEN BEFORE ANY RESULT EXISTS
 Context = 4 recent + 9 frames strided 16 apart, offsets `[-145, -129, -113, -97, -81, -65, -49, -33, -17, -4, -3, -2, -1]`. True reach is **145** steps (the name says 148; the far frames keep ctx6s16's positions so the layout is a strict superset of ctx6s16's). Everything else identical to the other 2M runs: same 2.2M-frame cache, frozen split `configs/val_episodes_2m.json` (sha256 7ba75f89..., commit a7ea0d5), seed 0, 100k steps, own `checkpoints/m1-2M-ctx-r148/` and `outputs/m1-2M-ctx-r148/`.
 
-Launch facts: gates passed (split sha256 matches; 1,943,899 train / 213,238 val windows all inside their episodes, 24% with clamped far offsets; History == dataset window on 7,200 steps; 150-step smoke at 6.8 it/s). Training started 07:44:54 UTC at 6.9 it/s, ETA ~11:50 UTC, wandb run `fnoenih8`, RSS 27 GB of the pod's 46 GB limit, 8.8 GB VRAM next to the idle demo server. Progress: `ssh -p 32325 -i ~/.runpod/ssh/runpodctl-ssh-key root@213.173.110.204 'cd /workspace/pacworld && tail -n 2 logs/queue_2m.log logs/m1-2M-ctx-r148.log'`. Gotchas: a first launch died at `wandb.init` because a fresh pod has no `~/.netrc` (it lives on the container disk, not the volume) - run `.venv/bin/wandb login --verify` as a gate on any new pod; **account balance was $6.74 at launch (~8.7 h at $0.78/h, i.e. until ~16:15 UTC Sep 19): top up before then or RunPod terminates the pod and the demo again** (checkpoints are safe on the network volume either way).
+Launch facts: gates passed (split sha256 matches; 1,943,899 train / 213,238 val windows all inside their episodes, 24% with clamped far offsets; History == dataset window on 7,200 steps; 150-step smoke at 6.8 it/s). Training started 07:44:54 UTC at 6.9 it/s, ETA ~11:50 UTC, wandb run `fnoenih8`, RSS 27 GB of the pod's 46 GB limit, 8.8 GB VRAM next to the idle demo server. Progress: `ssh -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<pod-ip> 'cd /workspace/pacworld && tail -n 2 logs/queue_2m.log logs/m1-2M-ctx-r148.log'`. Gotchas: a first launch died at `wandb.init` because a fresh pod has no `~/.netrc` (it lives on the container disk, not the volume) - run `.venv/bin/wandb login --verify` as a gate on any new pod; **account balance was $6.74 at launch (~8.7 h at $0.78/h, i.e. until ~16:15 UTC Sep 19): top up before then or RunPod terminates the pod and the demo again** (checkpoints are safe on the network volume either way).
 
 **Prediction (to be tested against `eval/fair_ghosts.py` + the standard eval, compared with ctx6s16):**
 1. Frightened phases end within the real 124-134-step range (ctx6s16: ended phases 113-394 steps, median 294, 5 of 13 never ended within 900 steps).
@@ -954,7 +977,7 @@ The detector now has a frightened-blue class for counting (`MazeReference.fright
 1. **Goal**: playable neural world model of Ms. Pac-Man (DIAMOND-style pixel diffusion, 64x64). Conventions are in `CLAUDE.md`; all hyperparameters in `configs/*.yaml`; every script takes `--seed`; every training run logs to wandb.
 2. **Data (200k set)**: 352 episodes / 201,736 steps in `data/agent/` (PPO agent + eps 0.1 / sticky 0.02 exploration, ALE v5 at frameskip 1 with manual skip 4 and max-pool over all 4 raw frames, maze crop 172x160, RAM saved), recorded with `record.py --seed 42`. Alignment check passes; 35 val episodes frozen in `configs/val_episodes.json`; 317 train episodes = 180,930 windows. Raw 210 MB, 64x64 cache 2.4 GB (12,288 bytes/frame, uncompressed).
 3. **Trained** (checkpoints only on the pod, `/workspace/pacworld/checkpoints/`): Model 1 -> `model1_ema.pt` (val denoise 0.0008, single-step 49.5 dB, 198 min for 100k steps). Model 0 = 5.8M MSE UNet baseline, 20k steps, `model0.pt` (44.9 dB). wandb: `smulakala06-san-jose-state-university/pacworld`.
-4. **Pod**: `ssh root@213.173.107.231 -p 11398 -i ~/.ssh/id_ed25519`, repo at `/workspace/pacworld` (synced by rsync; its `.git` is stale), venv `.venv`, RTX 4090 24 GB, 32 cores, **container memory limit 61 GB** (`free` shows the host's 124 GB; trust `/sys/fs/cgroup/memory.max`). `/workspace` is a network filesystem (effectively unlimited space); local `/` has 28 GB free. $0.74/hr. Local Mac has no CUDA; from Claude Code, ssh to the pod only works outside the sandbox.
+4. **Pod**: `ssh root@<pod-ip> -p <port> -i ~/.ssh/id_ed25519`, repo at `/workspace/pacworld` (synced by rsync; its `.git` is stale), venv `.venv`, RTX 4090 24 GB, 32 cores, **container memory limit 61 GB** (`free` shows the host's 124 GB; trust `/sys/fs/cgroup/memory.max`). `/workspace` is a network filesystem (effectively unlimited space); local `/` has 28 GB free. $0.74/hr. Local Mac has no CUDA; from Claude Code, ssh to the pod only works outside the sandbox.
 5. **Measured, rollouts** (10 longest val episodes x 3 seeds, start step 100; `eval/results/model1/summary.csv`): Model 1 keeps the maze for 60 s (wall IoU 0.96 vs 0.25 for Model 0 at 900 steps); Pac-Man error 1.8 / 13.1 / 19.5 px at 15 / 150 / 450 steps (Model 0: 1.6 / 14.1 / 27.4); responsiveness 0.79 / 0.45 / 0.30; pellet IoU 1.00 / 0.95 / 0.84; gated ghost count 4.0 -> 0.9 at step 150 and 1.6 at 450 (ground truth 3.6 / 4.0). Model 0 keeps more ghosts (3.1 / 2.6) but loses the maze.
 6. **Measured, ghost fade**: teacher-forced rollouts hold ghost mass at 96-100% of ground truth, so rendering is fine and the autoregressive loop is at fault. 3 -> 10 Euler steps recovers ~20 points of mass; 20 adds nothing. Inference ctx noise (0.01-0.1) only delays the collapse ~50 steps (the demo now runs at 0.01 for that reason). Red survives (92% at step 450), pink/cyan/orange do not (20-25%); max-pool colour blending is NOT the cause (red and orange are both blended, opposite outcomes).
 7. **Measured, mechanism**: see "hidden-timer" above. Supporting split (`pen_state_detection.csv`, 3 sampler steps, steps 251-450): ghosts never penned since rollout start are still detected 90% of the time; ghosts that had to be released during the rollout only 20% (ground truth 99% for both). No pixel-level freeze exists (0/30); a Pac-Man motion stall occurs in 5/30 rollouts and does not explain the metrics (`eval/results/model1/freeze/`).
@@ -964,7 +987,7 @@ The detector now has a frightened-blue class for counting (`MazeReference.fright
 11. **Hypothesis C**: residual loss at 10-20 sampler steps is exposure bias (never trained on own outputs); test by fine-tuning with rolled-out context. Responsiveness after ~5 s mostly measures trajectory agreement with ground truth, not control; it needs a model-world definition before it is trusted.
 12. **Not covered**: nothing beyond level 1 / maze 1; eval horizons past 450 steps have no ground truth (val episodes are 589-915 steps); the plateau shows more steps do not help at 200k frames but does not by itself separate "needs data" from "needs capacity" - `m1-2M-ctx4` is the test.
 13. **Demo** (pod): `cd /workspace/pacworld && tmux new -d -s serve ".venv/bin/python -u serve/server.py --seed 0 2>&1 | tee logs/serve.log"`. `POST /reload` (and the page's "Reload checkpoint") re-reads only the checkpoint; a change to `configs/serve.yaml` needs a server restart (`tmux kill-session -t serve`, then the command above). The page's ctx-sigma box overrides the config per session on Reset.
-14. **Demo** (Mac): the server binds to the pod's localhost, so the page only works through an SSH tunnel that YOU keep open: `ssh -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -L 8000:localhost:8000 -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<host>` with the CURRENT pod's host/port from `runpodctl pod get <pod id>` (2026-09-20: pod `o9dpam9ppg0u6o`, host 213.173.110.223, port 23413; host and port change with every new pod or restart, and old tunnels die silently). If the page does not load: `lsof -nP -iTCP:8000 -sTCP:LISTEN` on the Mac (nothing listed = no tunnel), then `curl localhost:8000/status` on the pod. Then open http://localhost:8000 (15 fps, 30 ms p50 at 3 sampler steps; 10 steps would break the 66 ms budget).
+14. **Demo** (Mac): the server binds to the pod's localhost, so the page only works through an SSH tunnel that YOU keep open: `ssh -N -o ServerAliveInterval=30 -o ExitOnForwardFailure=yes -L 8000:localhost:8000 -p <port> -i ~/.runpod/ssh/runpodctl-ssh-key root@<host>` with the CURRENT pod's host/port from `runpodctl pod get <pod id>` (2026-09-20: pod `o9dpam9ppg0u6o`, host <pod-ip>, port <port>; host and port change with every new pod or restart, and old tunnels die silently). If the page does not load: `lsof -nP -iTCP:8000 -sTCP:LISTEN` on the Mac (nothing listed = no tunnel), then `curl localhost:8000/status` on the pod. Then open http://localhost:8000 (15 fps, 30 ms p50 at 3 sampler steps; 10 steps would break the 66 ms budget).
 15. **Eval** (pod): `.venv/bin/python eval/eval_rollouts.py --seed 0 --model model1` and `--model model0`, then `.venv/bin/python eval/eval_rollouts.py --seed 0 --plot eval/results/model1 eval/results/model0` (about 15 min per model; detector self-test: `.venv/bin/python eval/detectors.py --seed 0 --episodes 8`).
 16. **Diagnostics** (pod, in this order): `.venv/bin/python eval/eval_rollouts.py --seed 0 --model model1 --save-all-preds --no-score` -> `.venv/bin/python eval/ghost_diagnostics.py --seed 0` -> `.venv/bin/python eval/pen_timer_analysis.py --seed 0` -> `.venv/bin/python eval/freeze_analysis.py --seed 0 --model model1` (the last needs `per_step.csv` from the full eval).
 17. **Retrain**: `tmux new -d -s model1 ".venv/bin/python -u train_model1.py --seed 0 --run-name <name> 2>&1 | tee logs/model1.log"` (8.4 it/s end to end, 3.3 h per 100k steps at context 4). Use `python -u` or the tee'd log stalls. **Hazard**: `train_model1.py` always writes `<checkpoint_dir>/model1_latest.pt` and `model1_ema.pt`, and the demo and eval read `checkpoints/model1_ema.pt` - any new run must set its own `train.checkpoint_dir` and `eval.out_dir` or it overwrites Model 1.

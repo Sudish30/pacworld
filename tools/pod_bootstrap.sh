@@ -2,7 +2,7 @@
 # Prepare a fresh RunPod pod for one 2M-dataset training run, then launch it.
 #
 #   bash pod_bootstrap.sh <run-name> <commit> <pod1-host> <pod1-ssh-port>
-#   e.g. bash pod_bootstrap.sh m1-2M-ctx8 a625e00 213.173.107.231 11398
+#   e.g. bash pod_bootstrap.sh m1-2M-ctx8 a625e00 <pod-ip> <port>
 #
 # Assumes: /workspace exists, python3 (3.12) is installed, this pod can ssh to pod 1 as root
 # (its key is in pod 1's authorized_keys) and ~/.netrc holds the wandb login (copied from pod 1).
