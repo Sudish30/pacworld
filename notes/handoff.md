@@ -98,6 +98,38 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## PART A FOLLOW-UP VERDICT (2026-10-01): the owner's prediction is SUPPORTED as registered
+Scored by `tools/timer_followup_verdict.py` against section 10 of `notes/timer_rule_design.md` (commit 1c0f9c3).
+Nothing was changed after the results. `followup_verdict.json` sha256 `c0ab445bb48e306f`; 4 wandb runs uploaded
+(`02pzkjbu`, `qcv3ebbr`, `gzs3xglu`, `km2c0ilh`). Layout S10b = S10 with the frame at −81 moved to −80; 60 test starts
+in 20 episodes per cell; [ ] = bootstrap 95% CI over episodes; D0 passes in all four.
+
+| cell | test | model on-time (tol 2) | ideal | model release | ideal release | parked | bar | result |
+|---|---|---|---|---|---|---|---|---|
+| S10b N=80 (on a frame) | R1 | **0.650 [0.533, 0.767]** | 0.716 | 1.000 | 1.000 | 0 / 60 | on-time ≥ 0.616 | **pass** |
+| S10b N=72 (mid-gap) | R2 | 0.233 | 0.317 | **0.783 [0.700, 0.867]** | 0.898 | 13 / 60 | release ≥ 0.798 | **fail (parks)** |
+| S10b N=79 (end of gap) | R2 | 0.117 | 0.120 | **0.350 [0.250, 0.450]** | 0.594 | 39 / 60 | release ≥ 0.494 | **fail (parks)** |
+| S10b N=88 (mid-gap) | R2 | 0.183 | 0.254 | **0.550 [0.417, 0.667]** | 0.874 | 27 / 60 | release ≥ 0.774 | **fail (parks)** |
+
+- **The frame at −80 fixes N=80.** With S10 (frames at −81 and −65) the model parked in 37 of 60 starts; with S10b it
+  parks in none and its released lags have quartiles 80 / 80 / 81. One offset moved by one step.
+- **All three off-frame periods park more than the ideal observer allows**, so the verdict is SUPPORTED.
+- **How strong each off-frame result is:**
+  - N=79 and N=88 fail clearly (0.35 vs 0.49; 0.55 vs 0.77).
+  - **N=72 fails by one start**: 47 of 60 released, and 48 were needed (0.783 vs 0.798). Its CI [0.70, 0.87]
+    contains the bar. Point estimates decide, so it counts as parking, but it is marginal.
+- **Where the ideal observer was right and wrong.** It predicted the ordering (79 worst, mid-gap cells better), and
+  the models follow that ordering. But the models park more than it does in every gap cell: by 0.11 at N=72, 0.24
+  at N=79 and 0.32 at N=88.
+- **When the models do release, they are on time for a gap cell**: lag quartiles 67.5 / 70 / 73.5 at N=72,
+  69 / 75 / 78 at N=79, 83 / 86 / 89 at N=88; median error 5 and 7.5 at the mid-gap cells (bars 7 and 8).
+- **Combined with part a:** gap cells at short periods released (S10 N=8: 1.00, N=24: 0.82), and gap cells at long
+  periods park (N=72: 0.78, 79: 0.35, 80 in S10: 0.38, 88: 0.55). So "off-frame parks" holds for the far frames,
+  not for every gap. The tested far gaps are 15-17 steps wide; the passing near gaps are 13 and 16 wide, so gap
+  width alone does not explain the difference. This last point is an observation across both experiments, not a
+  registered test.
+- **Cost.** Pod `e6ip83c50b2gr0` ran about 1.6 h (about $0.40) and is **stopped**.
+
 ## 2026-10-01: both GPU jobs launched; owner's answers; resume check for part b
 - **Owner:** no git history rewrite (old pod IPs stay in history). The 4b staging (strided first, P-S gates, stop for
   good on a fail) is confirmed. tectonic: the prebuilt 0.17.0 binary from its GitHub releases is in `.venv/bin/`
