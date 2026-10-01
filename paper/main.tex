@@ -1,0 +1,220 @@
+% pacworld paper draft. DRAFT: not submitted. Every number is read from the committed result files listed in
+% notes/handoff.md; sections marked TODO wait for results that do not exist yet. Do not fill a TODO by hand.
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,booktabs,graphicx,hyperref,xcolor}
+\usepackage[numbers]{natbib}
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{TODO:} #1}}
+
+\title{Hidden Timers Break Long Rollouts of Pixel Diffusion World Models:\\
+A Pre-registered Study on Ms.~Pac-Man}
+\author{Sudish Mulakala}
+\date{Draft, \today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We train an action-conditioned pixel diffusion world model of Ms.~Pac-Man in the style of DIAMOND~\cite{alonso2024diamond}
+and ask how far one can play inside it before the world stops making sense.
+The dominant long-horizon failure is a \emph{hidden timer}: the game holds ghosts in their pen for a fixed time (up to
+91 steps) with no on-screen countdown. Models whose context sees only the last 4 or 8 frames park the ghosts
+indefinitely: in 450-step rollouts on held-out episodes, 53--77\% of rollouts keep the pen occupied for 200+ steps,
+against 0\% in the real game.
+A context of the same frame count with a longer \emph{reach}, 4 recent frames plus 6 frames strided 16 steps apart,
+removes the parking (0/30; paired difference to 4 frames $-0.57$, 95\% CI $[-0.77,-0.37]$ over episodes).
+We state this as a rule: a model can time a hidden event of period $N$ only as precisely as its context offsets resolve
+$-N$. We test the rule against an ideal observer on a synthetic game \todo{verdict}, and attempt a second Atari game
+(the 2600 Pac-Man), whose pre-registered pilot stopped the study before the full runs.
+We also report three negative or null results: DIAMOND's released Ms.~Pac-Man model, run in our harness, loses its
+ghosts rather than parking them; a Genie-style latent action model~\cite{bruce2024genie} trained on our data collapsed
+to one code; and several earlier claims (``10$\times$ data helps everything'') do not survive episode-level confidence
+intervals.
+All experiments were pre-registered before their results existed.
+\end{abstract}
+
+\section{Introduction}
+Diffusion world models generate convincing game frames from a short context of past frames and actions
+\cite{alonso2024diamond,valevski2024gamengen}. Their short context makes them vulnerable to state that the screen does
+not show. Many games run clocks with no on-screen countdown: in Ms.~Pac-Man, ghosts wait in their pen for a fixed time
+after a death, and a power pellet's effect lasts 124--134 steps. A model that sees only its last few frames cannot know
+how long a ghost has been penned.
+
+We make three contributions.
+\begin{enumerate}
+\item \textbf{A documented failure and a fix.} With a 4- or 8-frame context, our 19M-parameter diffusion model parks
+ghosts in the pen indefinitely; a strided context with the same number of frames but a 97-step reach removes the
+parking without hurting other metrics (Sec.~\ref{sec:context}).
+\item \textbf{A testable rule with an ideal-observer prediction.} The model's timing should match that of an observer
+limited to the model's context offsets (Sec.~\ref{sec:rule}).
+\item \textbf{A pre-registered, statistically honest evaluation.} The criteria were committed before each result
+existed, CIs are bootstrapped over held-out episodes, and failures are reported (Secs.~\ref{sec:diamond},
+\ref{sec:lam}).
+\end{enumerate}
+
+\section{Setup}
+\label{sec:setup}
+\paragraph{Data.} \texttt{ALE/MsPacman-v5}~\cite{bellemare2013ale}, 4-frame skip with max-pooling over all 4 frames,
+because Ms.~Pac-Man draws one ghost per frame and 2-frame pooling (the DQN default~\cite{mnih2015dqn}) shows all four
+ghosts in only 29--47\% of observations. Maze crop $172\times160$, area-resized to $64\times64$. A PPO agent with
+$\varepsilon$-random and sticky-random exploration recorded 2.2M frames (3,879 episodes). The validation split is frozen
+by checksum: 388 episodes.
+
+\paragraph{Model.} An EDM~\cite{karras2022edm} denoising UNet (18.8M params; widths 64/96/192/192, attention at 16 and
+8 px). The noisy next frame is concatenated with $K$ context frames, and the actions enter through adaptive group
+normalisation. It is trained with GameNGen-style context-noise augmentation~\cite{valevski2024gamengen} and sampled
+with 3 Euler steps. Training: 100k steps at learning rate $10^{-4}$, followed by a 15k-step anneal at $10^{-5}$.
+
+\paragraph{Context layouts.} The single variable of the ablation is the set of context offsets: \textbf{ctx4}
+($-4..-1$), \textbf{ctx8} ($-8..-1$), and \textbf{ctx6s16} ($-97,-81,\dots,-17,-4..-1$: 10 frames, reach 97).
+
+\paragraph{Evaluation.} Rollouts of 450 steps from step 100 of the 10 longest held-out episodes, 3 sampler seeds each,
+replaying the recorded actions. Pixel detectors, validated on real frames, measure:
+\begin{itemize}
+\item Pac-Man position error;
+\item wall IoU and pellet IoU;
+\item ghost count, gated by RAM;
+\item responsiveness: whether the model's Pac-Man turns where the recorded action turns him;
+\item pen occupancy: any non-background pixels in the pen box.
+\end{itemize}
+CIs are 95\% bootstrap intervals over the 10 episodes (10,000 resamples). Each resampled episode keeps all three of its
+seeds.
+
+\section{The context ablation}
+\label{sec:context}
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lcccc}
+\toprule
+model & parked 200+ steps & longest pen stay (median) & Pac-Man err @450 (px) & responsiveness @450 \\
+\midrule
+real game & 0/30 & 78 & -- & -- \\
+Model 1 (4 frames, 200k data) & 16/30 [0.37, 0.70] & 222 [188, 299] & 19.5 [13.3, 25.4] & 0.30 [0.23, 0.38] \\
+ctx4 (2.2M data) & 17/30 [0.37, 0.77] & 238.5 [150, 287] & 19.0 [13.2, 24.8] & 0.37 [0.28, 0.47] \\
+ctx8 & 23/30 [0.63, 0.90] & 324 [282, 349] & 19.1 [12.6, 25.2] & 0.38 [0.26, 0.51] \\
+\textbf{ctx6s16} & \textbf{0/30} [0, 0]$^*$ & \textbf{82} [73, 93] & 13.7 [9.1, 18.6] & 0.39 [0.36, 0.41] \\
+ctx6s16 + LR anneal & 0/30$^*$ & 70 [65, 75] & 14.6 [10.4, 19.3] & 0.43 [0.40, 0.46] \\
+\bottomrule
+\end{tabular}
+\caption{Pen-timer and coherence metrics at the 450-step horizon. Brackets: 95\% bootstrap CIs over episodes; for
+parking, the CI of the parked fraction. All four originally reported pen numbers reproduce exactly. $^*$With no
+parked rollout in any of the 10 episodes, the bootstrap interval is degenerate; the exact one-sided 95\% upper bound
+on the per-episode parking rate is 0.26.}
+\label{tab:context}
+\end{table}
+
+\paragraph{What holds.}
+\begin{itemize}
+\item Strided context removes the parking: the parked fraction falls by $-0.567$ $[-0.767,-0.367]$ against ctx4, and
+by $-0.833$ $[-0.933,-0.733]$ in 900-step rollouts.
+\item It also lowers Pac-Man error at 450 steps: $-5.3$ px $[-11.6,-0.5]$.
+\item The LR anneal improves responsiveness: $+0.044$ $[+0.009,+0.080]$.
+\end{itemize}
+
+\paragraph{What does not hold.}
+\begin{itemize}
+\item ``Eight frames park more than four'' is a trend only: $+0.20$ $[-0.10,+0.47]$.
+\item Ten times more data does not change parking ($+0.03$ $[-0.20,+0.27]$) or Pac-Man error ($-0.5$ px
+$[-2.7,+1.3]$); only responsiveness improves ($+0.071$ $[+0.014,+0.129]$).
+\item No difference in ghost count between our models is significant.
+\item A $128\times128$ version is sharper per step but drifts faster: Pac-Man error $+8.2$ px $[+1.9,+13.9]$ at
+64px-equivalent.
+\end{itemize}
+
+\paragraph{The second timer is not solved.} The frightened timer (124--134 steps) exceeds the 97-step reach.
+\begin{itemize}
+\item No model ends frightened phases on time.
+\item A 145-step-reach model (13 frames) ended them too early, and weakened the pen timer that 10 frames had fixed.
+\item Teacher-forced analysis shows every model copies the phase end one step after it appears in a real frame, instead
+of predicting it. The phase end is a one-frame event about once per episode, which the denoising loss barely rewards.
+\end{itemize}
+Reach therefore appears \emph{necessary but not sufficient}.
+
+\section{The hidden-timer rule}
+\label{sec:rule}
+\paragraph{Rule.} An autoregressive frame model sees only its context. It can time a hidden-timer event of period $N$
+only as precisely as its context offsets resolve $-N$:
+\begin{itemize}
+\item exactly, if $-N$ is an offset;
+\item spread over the gap, if $-N$ falls between two offsets;
+\item not at all beyond the reach $R$. The best possible behaviour is then a geometric wait with hazard $1/(N-R)$, and a
+sampling model may do worse by parking.
+\end{itemize}
+
+\paragraph{Ideal observer.} For each layout we estimate, from training data, the hazard
+$P(\text{event next}\mid\text{state at the layout's offsets})$, and roll this observer out from the same test starts
+as the models. It is the best that \emph{any} model with those offsets can do, and its curve is the rule's prediction.
+It is computed and committed before any model trains.
+
+\paragraph{Synthetic game.}
+\begin{itemize}
+\item $16\times16$ frames. A ghost is penned for exactly $N$ frames; nothing on screen changes with elapsed time.
+\item 23 cells cross three layouts with $N\in[3,200]$: C4 and C10 are consecutive with reach 4 and 10; S10 is ctx6s16's
+layout, reach 97.
+\item Small versions of our model, 15k steps each.
+\item Pre-registered criteria: in reach, the model must come close to the observer; beyond reach, it must not beat an
+observer blind to the capture.
+\end{itemize}
+\todo{Table of model vs ideal-observer on-time fractions for all 23 cells with CIs, and the verdict (HOLDS / PARTIAL /
+FAILS) from tools/timer\_verdict.py.}
+In the cells scored so far, the in-reach models match the observer (C10 $N{=}8$: 1.000 vs 1.000; S10 $N{=}33$: 0.867 vs
+0.861). The out-of-reach C4 models not only lose the timing but park: their release fraction is 0.28--0.65, against
+0.94--1.00 for the observer.
+
+\paragraph{A real Atari game.}
+\begin{itemize}
+\item The 2600 Pac-Man holds a ghost in its house for exactly 35 or 36 steps after every death. The interval starts at
+a visible event, has no on-screen countdown, and is detectable at 64px in 622 of 622 held-out stays.
+\item The observer predicts a large contrast: S10 is on time in 0.889 of starts, C10 in 0.101.
+\item The pre-registered pilot (S10 after 20k of 115k steps) had to release the ghost in at least 50\% of starts. It
+released in 0.486 $[0.43, 0.54]$ and parked the rest, so the study stopped before training the full models.
+\item This is a learnability failure at 20k steps. It is not a test of the rule.
+\end{itemize}
+
+\section{External baseline: DIAMOND}
+\label{sec:diamond}
+\paragraph{What we ran.} DIAMOND released its trained Atari-100k Ms.~Pac-Man world model (4-frame context). We ran it
+without retraining: we re-simulated our held-out episodes in its preprocessing, which includes the score area and
+2-frame pooling, and rebuilt our detectors for its geometry. All validity checks passed.
+
+\paragraph{The registered prediction failed.} We had predicted that it would park ghosts in at least 10 of 30
+rollouts. It parked in 0/30, because its ghosts disappear: its ghost count at 450 steps is 0.077 $[0.054,0.097]$ of its
+own ground truth, against 0.41 for our 4-frame Model~1. This is neither support for the rule nor evidence against it.
+
+\paragraph{Other metrics.} DIAMOND keeps the walls perfectly (wall IoU / ceiling 1.000) and is worse on Pac-Man error
+(25.3 vs 14.6 px for our served model) and responsiveness (0.18 vs 0.43). DIAMOND was built for 15-step imagination
+and trained on about $1/20$ of our data, so this comparison measures long-horizon coherence, not the merit of its design.
+
+\section{Learned controls: a negative result}
+\label{sec:lam}
+\paragraph{Setup.} We trained a Genie-style latent action model~\cite{bruce2024genie} on frames only: 8 codes, a VQ
+bottleneck~\cite{vandenoord2017vqvae} and a decoder with the 97-step context, under a label firewall tested by double
+runs with scrambled labels. One arm was generic and one weighted the loss around Pac-Man with a pixel detector.
+
+\paragraph{Result.} Both arms collapsed to one or two codes; code gain was exactly 1.000, so the decoder ignored the
+code. The pre-registered stop fired before any label was read.
+
+\paragraph{Diagnosis.} The decoder predicts the next frame well from context alone, in part because the recording
+agent's moves are predictable from the screen. \todo{LAM v2 (4-frame decoder, entropy-regularised VQ, non-zero code
+conditioning), if the owner approves and runs it.}
+
+\section{Limitations}
+\begin{itemize}
+\item One game for the main study, 64px frames, one seed per training configuration, and 10 evaluation episodes,
+hence the wide CIs.
+\item The synthetic test isolates timing but has no action conditioning.
+\item The real-game test of the rule stopped at its pilot.
+\item The frightened timer remains unsolved.
+\item Responsiveness on replayed trajectories partly measures how predictable the agent is, not controllability.
+\item The pen-occupancy measure is not resolution-invariant; at 128px its own ground truth differs.
+\end{itemize}
+
+\section{Related work}
+World models for control~\cite{ha2018worldmodels,hafner2023dreamerv3,micheli2023iris}; diffusion world models and
+game engines~\cite{alonso2024diamond,valevski2024gamengen}; latent actions from video~\cite{bruce2024genie};
+quantisation with entropy regularisation~\cite{yu2024magvit2}. \todo{Expand; check for prior work on context reach and
+long-horizon state in video world models.}
+
+\bibliographystyle{plainnat}
+\bibliography{refs}
+\end{document}
