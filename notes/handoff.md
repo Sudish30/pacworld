@@ -98,6 +98,30 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## LAM v2 PRE-REGISTERED (2026-10-01): `notes/lam_v2_design.md`, approved by the owner with changes; no GPU run yet
+- **Run order (owner):** README -> 4b attempt 2 -> 4a follow-up -> LAM v2 pilot.
+- **Five changes vs v1, nothing else:**
+  - (i) the decoder sees only the last frame (the owner's change; the draft had 4 frames);
+  - (ii) VQ + MAGVIT-v2 entropy term, weight tied to the loss scale: w = L_recon / |T| on the first training batch,
+    then fixed and saved in the checkpoint;
+  - (iii) non-zero init of the decoder's AdaGN projections and output conv;
+  - (iv) one player-weighted arm;
+  - (v) the code is also broadcast as 32 extra input channels of the decoder's first conv.
+- **Pilot rule, all three at step 2,500, else stop; no second pilot:** perplexity ≥ 4; code gain > 1.01; Pac-Man
+  share > ghost share of the 8-code output spread on 1,000 fixed val contexts (`tools/lam_pilot.py`).
+- **Main risk:** ghost capture. One frame makes ghost headings ambiguous too. Condition 3 guards it.
+- **$0 Mac mechanics checks on the final config** (200k set, batch 16, CPU; not results, not a gate):
+  - code influence at init 2.5e-3 (> 0);
+  - tied weight 0.0833 (L_recon 0.015876 / |T| 0.190663). The pod's value comes from its own first batch and must be
+    recorded here with the pilot;
+  - 300 steps: perplexity 1.05 / 6.61 / 6.07 and code gain x1.000 / x1.005 / x1.013 at steps 100 / 200 / 300;
+  - attribution at step 300: Pac-Man share 0.110, ghosts 0.137, elsewhere 0.748. Condition 3 would not hold there.
+- **Pod commands for the pilot** (after the balance check and the pre-spend items, which are in the design file):
+  - `python train_lam.py --config configs/lam-v2.yaml --seed 0 --part lam --stop-at 2500 --wandb-mode offline --run-name lam-v2`
+  - `python tools/lam_pilot.py --config configs/lam-v2.yaml --seed 0`
+  - only on PASS: the same train command with `--resume` and without `--stop-at`.
+- v1 is unaffected: v1 configs build the same model and the lam-B-mac checkpoint loads with all keys matching.
+
 ## STEP 4a VERDICT (2026-10-01): the hidden-timer rule holds PARTIALLY on the synthetic game
 Scored by `tools/timer_verdict.py` against ab0a961 + Amendment 1. Nothing was re-scored or changed after the results.
 - **Inputs.** All 23 cells, 15k steps each, seed 0, 60 test starts in 20 test episodes per cell. The 47 result files

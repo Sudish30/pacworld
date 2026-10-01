@@ -48,9 +48,19 @@ class VectorQuantizer(nn.Module):
     """EMA codebook (van den Oord et al. 2017, appendix), commitment loss, straight-through gradient, and a restart of
     codes that went unused for restart_after training steps (re-seeded from a random encoder output of the batch)."""
 
-    def __init__(self, n_codes, dim, decay, commitment, restart_after, eps=1e-5):
+    def __init__(self, n_codes, dim, decay, commitment, restart_after, eps=1e-5, entropy=None):
+        """entropy (LAM v2): {"weight", "temperature"} adds weight * (E_z[H(p(k|z))] - H(E_z[p(k|z)])), MAGVIT-v2's
+        code-usage entropy objective, on L2-normalised z and codes (gradient to the encoder only); None = v1.
+        weight "tied": the weight is set once by calibrate_entropy() from the first training batch (train_lam.py) so
+        that |weight * term| equals the reconstruction loss there; it is then fixed and saved with the checkpoint."""
         super().__init__()
         self.n, self.decay, self.beta, self.restart_after, self.eps = n_codes, decay, commitment, restart_after, eps
+        self.entropy = entropy
+        self.last_entropy = {}
+        self.entropy_raw = None                      # the unweighted term of the last training forward (with gradient)
+        if entropy:
+            w = entropy["weight"]
+            self.register_buffer("entropy_weight", torch.tensor(float("nan") if w == "tied" else float(w)))
         self.register_buffer("embed", torch.zeros(n_codes, dim))
         self.register_buffer("embed_sum", torch.zeros(n_codes, dim))
         self.register_buffer("cluster_size", torch.zeros(n_codes))
@@ -101,7 +111,25 @@ class VectorQuantizer(nn.Module):
                 idx = self._update(z.detach(), idx)
             q = self.embed[idx]
             commit = self.beta * F.mse_loss(z, q.detach())
+            if self.entropy and self.training:
+                zn, en = F.normalize(z, dim=1), F.normalize(self.embed.detach(), dim=1)
+                p = torch.softmax(-(zn[:, None] - en[None]).pow(2).sum(-1) / self.entropy["temperature"], 1)
+                per_sample = -(p * p.clamp_min(1e-12).log()).sum(1).mean()          # low = confident assignments
+                avg = p.mean(0)
+                batch = -(avg * avg.clamp_min(1e-12).log()).sum()                   # high = codes spread over the batch
+                self.entropy_raw = per_sample - batch
+                if not torch.isnan(self.entropy_weight):                            # "tied" and not yet calibrated: the
+                    commit = commit + self.entropy_weight * self.entropy_raw        # training loop adds the term itself
+                self.last_entropy = {"per_sample": per_sample.item(), "batch": batch.item(), "weight": self.entropy_weight.item()}
             return z + (q - z).detach(), idx, commit
+
+    def calibrate_entropy(self, recon_loss):
+        """weight "tied", first training batch only: weight = recon_loss / |entropy term|. Returns the weighted term
+        of this batch (to add to its loss), or None if the weight is already set."""
+        if not self.entropy or not torch.isnan(self.entropy_weight):
+            return None
+        self.entropy_weight.fill_(float(recon_loss) / abs(self.entropy_raw.item()))
+        return self.entropy_weight * self.entropy_raw
 
 
 # ----------------------------------------------------------------------------- decoder
@@ -109,15 +137,19 @@ class CodeUNet(UNet):
     """model1's UNet with the code vector in the action slot: cond = MLP(Linear(code)). No noise-level inputs (the
     decoder is a deterministic regression), so those embeddings are dropped."""
 
-    def __init__(self, context_frames, code_dim, m):
-        super().__init__(in_channels=3 * context_frames, out_channels=3, context=1, n_actions=1, widths=m["widths"],
+    def __init__(self, context_frames, code_dim, m, code_input=False):
+        """code_input (LAM v2): the code vector is also broadcast over the image and concatenated to the input frames,
+        so it enters the first conv (default init, non-zero) as code_dim extra channels."""
+        self.code_input = code_input
+        super().__init__(in_channels=3 * context_frames + (code_dim if code_input else 0), out_channels=3, context=1, n_actions=1, widths=m["widths"],
                          blocks_per_level=m["blocks_per_level"], attn_levels=m["attn_levels"], heads=m["heads"],
                          cond_dim=m["cond_dim"], action_embed_dim=code_dim, groupnorm_groups=m["groupnorm_groups"],
                          fourier_dim=m["fourier_dim"], dropout=m["dropout"])
         del self.action_embed, self.noise_ff, self.noise_proj, self.ctx_ff, self.ctx_proj
 
     def forward(self, ctx, q):
-        return self.run(ctx, self.cond_mlp(self.action_proj(q)))
+        x = torch.cat([ctx, q[:, :, None, None].expand(-1, -1, *ctx.shape[-2:]).to(ctx.dtype)], 1) if self.code_input else ctx
+        return self.run(x, self.cond_mlp(self.action_proj(q)))
 
 
 class LAM(nn.Module):
@@ -129,8 +161,21 @@ class LAM(nn.Module):
             raise SystemExit("lam.encoder_offsets must be strictly increasing and end at 0 (the target frame)")
         self.encoder = ConvTrunk(3 * len(self.enc_offsets), L["encoder_widths"], L["encoder_hidden"], L["code_dim"],
                                  L["groupnorm_groups"], d["size"])
-        self.vq = VectorQuantizer(L["n_codes"], L["code_dim"], L["vq_decay"], L["commitment"], L["restart_after"])
-        self.decoder = CodeUNet(d["context"], L["code_dim"], L["decoder"])
+        self.vq = VectorQuantizer(L["n_codes"], L["code_dim"], L["vq_decay"], L["commitment"], L["restart_after"],
+                                  entropy=L.get("entropy"))
+        # LAM v2: lam.decoder_offsets = the trailing subset of data.context_offsets the decoder sees (None = all, v1)
+        offs = list(d.get("context_offsets") or range(-d["context"], 0))
+        dec = list(L.get("decoder_offsets") or offs)
+        if dec != offs[len(offs) - len(dec):]:
+            raise SystemExit(f"lam.decoder_offsets {dec} must be the trailing offsets of data.context_offsets {offs}")
+        self.dec_frames = len(dec)
+        self.decoder = CodeUNet(self.dec_frames, L["code_dim"], L["decoder"], code_input=bool(L.get("decoder_code_input")))
+        if L.get("decoder_cond_init_std"):          # LAM v2: the code influences the output from step 0 (v1: zero init)
+            for mod in self.decoder.modules():
+                if hasattr(mod, "proj") and isinstance(mod.proj, nn.Linear) and mod.__class__.__name__ == "AdaGN":
+                    nn.init.normal_(mod.proj.weight, std=L["decoder_cond_init_std"])
+        if L.get("decoder_out_init_std"):           # LAM v2: the UNet's output conv is zero-initialised (as in model1), which
+            nn.init.normal_(self.decoder.out_conv.weight, std=L["decoder_out_init_std"])   # alone blocks any code influence
 
     def encode(self, enc_frames):
         """(B, 3E, H, W) -> code index (B,). Inference only (eval mode: no codebook update)."""
@@ -144,6 +189,7 @@ class LAM(nn.Module):
         return self.decode(dec_ctx, q), idx, commit, q
 
     def decode(self, dec_ctx, q):
+        dec_ctx = dec_ctx[:, -3 * self.dec_frames:]          # v2: only the decoder's trailing frames (v1: all of them)
         return dec_ctx[:, -3:] + self.decoder(dec_ctx, q).float()
 
 

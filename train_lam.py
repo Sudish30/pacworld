@@ -40,6 +40,8 @@ def parse_args():
     p.add_argument("--batch-size", type=int, help="override the batch size (smoke tests)")
     p.add_argument("--eval-every", type=int, help="override eval_every (smoke tests)")
     p.add_argument("--resume", action="store_true", help="continue from this part's checkpoint")
+    p.add_argument("--stop-at", type=int, help="stop (eval + checkpoint) at this step; the LR schedule still spans "
+                                               "train.steps, so --resume continues the same run (LAM v2 pilot)")
     p.add_argument("--wandb-mode", choices=["online", "offline", "disabled"], default="online")
     p.add_argument("--run-name")
     p.add_argument("--firewall-scramble-seed", type=int, help="label-firewall test only (see the module docstring)")
@@ -232,7 +234,8 @@ def main():
     t_start = t_log = time.time()
     start_step = step
     model.train()
-    while step < tr["steps"]:
+    end = min(tr["steps"], args.stop_at or tr["steps"])
+    while step < end:
         lr = cosine_lr(step, tr)
         for pg in opt.param_groups:
             pg["lr"] = lr
@@ -243,8 +246,15 @@ def main():
                 pred, idx, commit, _ = model(enc, ctx)
                 w = player_weight(pac_b, tgt.shape[-1], cfg["lam"]["loss_weight"], device)
                 recon = weighted_mse(pred, tgt, w)
+                tied = model.vq.calibrate_entropy(recon.item())      # lam.entropy.weight "tied": set on the first batch
+                if tied is not None:
+                    commit = commit + tied
+                    print(f"entropy weight tied to the loss scale on the first batch: recon {recon.item():.6f} / "
+                          f"|term| {abs(model.vq.entropy_raw.item()):.6f} = {float(model.vq.entropy_weight):.6f}")
                 loss = recon + commit
                 parts = {"recon": recon.item(), "commit": commit.item(), "mse": F.mse_loss(pred.detach(), tgt).item()}
+                if model.vq.entropy:
+                    parts["entropy_term"] = model.vq.entropy_weight.item() * model.vq.entropy_raw.item()
             else:
                 ctx_u8, y = batches.next()
                 loss = F.cross_entropy(model(to_dev(codec, ctx_u8, device)), y.to(device))
@@ -267,7 +277,7 @@ def main():
             wandb.log(logs, step=step)
             print(f"step {step:6d}/{tr['steps']}  loss {loss.item():.5f}  " + " ".join(f"{k} {v:.5f}" for k, v in parts.items())
                   + f"  gnorm {gnorm.item():.2f}  {sps:.1f} it/s  eta {(tr['steps'] - step) / max(sps, 1e-6) / 60:.0f} min")
-        if step % tr["eval_every"] == 0 or step == tr["steps"]:
+        if step % tr["eval_every"] == 0 or step == end:
             evaluate()
             save()
 
