@@ -98,6 +98,74 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STEP 4a VERDICT (2026-10-01): the hidden-timer rule holds PARTIALLY on the synthetic game
+Scored by `tools/timer_verdict.py` against ab0a961 + Amendment 1. Nothing was re-scored or changed after the results.
+- **Inputs.** All 23 cells, 15k steps each, seed 0, 60 test starts in 20 test episodes per cell. The 47 result files
+  are in `eval/results/timer/` (git-ignored like all results; `verdict.json` sha256 `ed2d8c20995d9f2d`). The 23
+  wandb runs were trained offline and uploaded from the Mac to `pacworld`.
+- **D0 passes in all 23 cells.**
+- **Verdict: PARTIAL.**
+  - Every out-of-reach cell passes R3.
+  - Two in-reach cells fail: S10 N=97 fails R1, S10 N=80 fails R2.
+  - R4 holds at N=33 and N=65 and fails at N=97.
+
+Point estimates decide; [ ] = bootstrap 95% CI over the 20 test episodes. "on-time" uses the cell's registered
+tolerance: 2 for R1, max(2, 0.1N) for R3.
+
+| cell | test | model on-time | ideal | model release | ideal release | median \|lag−N\| (ideal) | bar | result |
+|---|---|---|---|---|---|---|---|---|
+| C4 N=3 | R1 | 1.000 [1.000, 1.000] | 1.000 | 1.000 | 1.000 | 0 (0) | ≥ 0.80 | pass |
+| C10 N=3 | R1 | 1.000 [1.000, 1.000] | 1.000 | 1.000 | 1.000 | 0 (0) | ≥ 0.80 | pass |
+| C10 N=8 | R1 | 1.000 [1.000, 1.000] | 1.000 | 1.000 | 1.000 | 0 (0) | ≥ 0.80 | pass |
+| C10 N=10 | R1 | 1.000 [1.000, 1.000] | 1.000 | 1.000 | 1.000 | 0 (0) | ≥ 0.80 | pass |
+| S10 N=3 | R1 | 1.000 [1.000, 1.000] | 1.000 | 1.000 | 1.000 | 0 (0) | ≥ 0.80 | pass |
+| S10 N=17 | R1 | 0.867 [0.767, 0.950] | 0.901 | 1.000 | 1.000 | 0 (0) | ≥ 0.80 | pass |
+| S10 N=33 | R1 | 0.867 [0.767, 0.950] | 0.861 | 1.000 | 1.000 | 0 (0) | ≥ 0.761 | pass |
+| S10 N=65 | R1 | 0.817 [0.683, 0.917] | 0.801 | 1.000 | 1.000 | 0 (0) | ≥ 0.701 | pass |
+| **S10 N=97** | R1 | **0.167 [0.067, 0.267]** | 0.299 | 1.000 | 1.000 | 24.5 (6) | ≥ 0.199 | **FAIL** |
+| S10 N=8 | R2 | 0.383 | 0.451 | 1.000 [1.000, 1.000] | 0.955 | 3 (3) | rel ≥ 0.855, med ≤ 6 | pass |
+| S10 N=24 | R2 | 0.317 | 0.326 | 0.817 [0.717, 0.900] | 0.891 | 5 (4) | rel ≥ 0.791, med ≤ 7 | pass |
+| **S10 N=80** | R2 | 0.117 | 0.125 | **0.383 [0.267, 0.500]** | 0.594 | **130** [73, 130] (12) | rel ≥ 0.494, med ≤ 15 | **FAIL** |
+| C4 N=8 | R3 | 0.350 [0.217, 0.500] | 0.431 | 1.000 | 1.000 | 3 (3) | ≤ 0.581 | pass |
+| C4 N=17 | R3 | 0.067 [0.017, 0.133] | 0.139 | 0.650 | 0.997 | 43.5 (9) | ≤ 0.289 | pass |
+| C4 N=33 | R3 | 0.033 [0.000, 0.083] | 0.087 | 0.300 | 0.978 | 83 (19) | ≤ 0.237 | pass |
+| C4 N=65 | R3 | 0.033 [0.000, 0.083] | 0.077 | 0.283 | 0.942 | 115 (39) | ≤ 0.227 | pass |
+| C10 N=17 | R3 | 0.317 [0.233, 0.400] | 0.258 | 1.000 | 1.000 | 5 (5) | ≤ 0.408 | pass |
+| C10 N=33 | R3 | 0.117 [0.050, 0.183] | 0.109 | 0.733 | 0.987 | 31.5 (15) | ≤ 0.259 | pass |
+| C10 N=65 | R3 | 0.000 [0.000, 0.000] | 0.087 | 0.283 | 0.952 | 115 (36) | ≤ 0.237 | pass |
+| C10 N=97 | R3 | 0.017 [0.000, 0.050] | 0.082 | 0.167 | 0.927 | 147 (57) | ≤ 0.232 | pass |
+| C10 N=200 | R3 | 0.000 [0.000, 0.000] | 0.078 | 0.117 | 0.890 | 250 (121) | ≤ 0.228 | pass |
+| S10 N=200 | R3 | 0.017 [0.000, 0.050] | 0.146 | 0.233 | 0.960 | 250 (68) | ≤ 0.296 | pass |
+| S10 N=145 | transition (unscored) | 0.000 [0.000, 0.000] | 0.204 | 0.200 | 0.990 | 195 (34) | - | reported |
+
+**What the numbers say**
+- **Exact offsets work when the event is clean.** Wherever −N is an offset and the ideal observer itself is reliable
+  (S10 at 17, 33, 65; every N=3 cell; C10 at 8 and 10), the model matches the ideal observer within a few points. At S10 N=65
+  the released lags have quartiles 65 / 65 / 65.
+- **Out of reach, the models park instead of guessing.** The rule's ideal observer releases on a geometric hazard
+  (release 0.89-0.98). The models release in only 0.12-0.30 of starts at N ≥ 33 for C4 and N ≥ 65 for C10 and S10.
+  - Parked starts: C10 N=65 43/60, C10 N=200 53/60, and S10 N=145 (transition zone) 48/60.
+  - This is the pen-parking failure seen in pacworld, reproduced in a game with no other cause.
+  - **Caveat on R3:** R3 is one-sided (no better than blind). Parking passes it easily, so R3 shows that no model
+    timed a period beyond its reach. It does not show that the models behave like the blind observer.
+- **The S10 N=97 failure** is the cell Amendment 1 flagged as a weak test: −97 is the farthest offset, and far offsets
+  often fall inside the previous stay, so even the ideal observer is on time in only 0.299.
+  - The model always releases (0 parked).
+  - Its lags spread widely: the 10th / 25th / 50th / 75th / 90th percentiles are 20 / 97 / 104 / 123 / 141.
+  - On-time 0.167 vs bar 0.199. The CI [0.067, 0.267] contains the bar, but point estimates decide: **fail.**
+- **The S10 N=80 failure is parking inside a gap.**
+  - When the model releases, it releases near N: lag quartiles 73 / 76 / 78.5, and early 0.067 against the
+    observer's 0.233.
+  - But it parks in 37 of 60 starts. The observer parks in 41%; the model parks in 62%.
+  - Design §7 says what this means: a cost of striding, an argument for denser far offsets.
+- **Reading under the registered §7:** reach is necessary (no out-of-reach cell timed anything) but not sufficient
+  at this budget. Inside the reach, an exact offset gives exact timing when the observer is reliable. A gap or a
+  far offset that is usually masked leads to parking or spread.
+
+**Cost.** Pod `e6ip83c50b2gr0` (RTX 2000 Ada, $0.24/h) ran the sweep and is **stopped**. The balance is now **$24.66**.
+Total new GPU spend in this push: about **$5.28** of the $100 cap ($29.94 at the top-up, minus $24.66 now; this
+includes volume storage). No pod is running.
+
 ## STEP 4b STOPPED (2026-10-01): the pre-registered pilot fails, so part b stops before the full runs
 - **The pilot rule** (timer_rule_design.md §9): the first 20k steps of pac-S10 must render the occupied house and
   release the ghost within the 122-step horizon in **≥ 50%** of val starts, or the project stops.
@@ -215,6 +283,7 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - Part b needs it: the 18.8M UNet ran below 0.7 it/s on the shared RTX 2000 Ada and slowed the timer sweep. On the
   4090 it runs at 9.0 it/s.
 - The timer sweep stays on `e6ip83c50b2gr0`. Balance before creating it: $26.60.
+- **2026-10-01: both pods are stopped** (sweep finished; part b stopped at its pilot). Balance $24.66.
 
 ## STEP 4a pre-spend check (2026-09-30, written before any GPU spend; the criteria stay those of ab0a961 + Amendment 1)
 **(a) Most likely way it fails.**

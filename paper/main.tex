@@ -24,7 +24,9 @@ against 0\% in the real game.
 A context of the same frame count with a longer \emph{reach}, 4 recent frames plus 6 frames strided 16 steps apart,
 removes the parking (0/30; paired difference to 4 frames $-0.57$, 95\% CI $[-0.77,-0.37]$ over episodes).
 We state this as a rule: a model can time a hidden event of period $N$ only as precisely as its context offsets resolve
-$-N$. We test the rule against an ideal observer on a synthetic game \todo{verdict}, and attempt a second Atari game
+$-N$. On a synthetic game with an ideal-observer prediction, the pre-registered verdict is that the rule holds
+\emph{partially}: no model times a period beyond its reach, and models with $-N$ as an offset match the observer, but
+a gap cell parks and the farthest-offset cell misses its bar. We also attempt a second Atari game
 (the 2600 Pac-Man), whose pre-registered pilot stopped the study before the full runs.
 We also report three negative or null results: DIAMOND's released Ms.~Pac-Man model, run in our harness, loses its
 ghosts rather than parking them; a Genie-style latent action model~\cite{bruce2024genie} trained on our data collapsed
@@ -155,11 +157,73 @@ layout, reach 97.
 \item Pre-registered criteria: in reach, the model must come close to the observer; beyond reach, it must not beat an
 observer blind to the capture.
 \end{itemize}
-\todo{Table of model vs ideal-observer on-time fractions for all 23 cells with CIs, and the verdict (HOLDS / PARTIAL /
-FAILS) from tools/timer\_verdict.py.}
-In the cells scored so far, the in-reach models match the observer (C10 $N{=}8$: 1.000 vs 1.000; S10 $N{=}33$: 0.867 vs
-0.861). The out-of-reach C4 models not only lose the timing but park: their release fraction is 0.28--0.65, against
-0.94--1.00 for the observer.
+\paragraph{Criteria.} R1 (exact offset in reach): on-time fraction (tolerance 2) $\ge\min(0.80,\text{ideal}-0.10)$.
+R2 (gap in reach): release fraction $\ge\min(0.90,\text{ideal}-0.10)$ and median $|\text{lag}-N|\le$ ideal median $+3$.
+R3 (out of reach, $N\ge1.5R$): on-time fraction (tolerance $\max(2,0.1N)$) $\le$ ideal $+0.15$. R4: at
+$N\in\{33,65,97\}$, S10 passes R1 and C10 passes R3. The rule \emph{holds} if all pass, holds \emph{partially} if every
+R3 cell passes but some R1/R2 cell fails, and \emph{fails} if any R3 cell fails. One R2 bar was amended before any model
+trained, because the observer itself parks in the gap cells; the amendment is in the pre-registration.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{llccccc}
+\toprule
+cell & test & model on-time & ideal on-time & model release & ideal release & result \\
+\midrule
+C4 $N{=}3$ & R1 & 1.000 [1.000, 1.000] & 1.000 & 1.00 & 1.00 & pass \\
+C10 $N{=}3$ & R1 & 1.000 [1.000, 1.000] & 1.000 & 1.00 & 1.00 & pass \\
+C10 $N{=}8$ & R1 & 1.000 [1.000, 1.000] & 1.000 & 1.00 & 1.00 & pass \\
+C10 $N{=}10$ & R1 & 1.000 [1.000, 1.000] & 1.000 & 1.00 & 1.00 & pass \\
+S10 $N{=}3$ & R1 & 1.000 [1.000, 1.000] & 1.000 & 1.00 & 1.00 & pass \\
+S10 $N{=}17$ & R1 & 0.867 [0.767, 0.950] & 0.901 & 1.00 & 1.00 & pass \\
+S10 $N{=}33$ & R1 & 0.867 [0.767, 0.950] & 0.861 & 1.00 & 1.00 & pass \\
+S10 $N{=}65$ & R1 & 0.817 [0.683, 0.917] & 0.801 & 1.00 & 1.00 & pass \\
+S10 $N{=}97$ & R1 & 0.167 [0.067, 0.267] & 0.299 & 1.00 & 1.00 & \textbf{fail} \\
+\midrule
+S10 $N{=}8$ & R2 & 0.383 [0.283, 0.484] & 0.451 & 1.00 & 0.96 & pass \\
+S10 $N{=}24$ & R2 & 0.317 [0.217, 0.433] & 0.326 & 0.82 & 0.89 & pass \\
+S10 $N{=}80$ & R2 & 0.117 [0.050, 0.183] & 0.125 & 0.38 & 0.59 & \textbf{fail} \\
+\midrule
+C4 $N{=}8$ & R3 & 0.350 [0.217, 0.500] & 0.431 & 1.00 & 1.00 & pass \\
+C4 $N{=}17$ & R3 & 0.067 [0.017, 0.133] & 0.139 & 0.65 & 1.00 & pass \\
+C4 $N{=}33$ & R3 & 0.033 [0.000, 0.083] & 0.087 & 0.30 & 0.98 & pass \\
+C4 $N{=}65$ & R3 & 0.033 [0.000, 0.083] & 0.077 & 0.28 & 0.94 & pass \\
+C10 $N{=}17$ & R3 & 0.317 [0.233, 0.400] & 0.258 & 1.00 & 1.00 & pass \\
+C10 $N{=}33$ & R3 & 0.117 [0.050, 0.183] & 0.109 & 0.73 & 0.99 & pass \\
+C10 $N{=}65$ & R3 & 0.000 [0.000, 0.000] & 0.087 & 0.28 & 0.95 & pass \\
+C10 $N{=}97$ & R3 & 0.017 [0.000, 0.050] & 0.082 & 0.17 & 0.93 & pass \\
+C10 $N{=}200$ & R3 & 0.000 [0.000, 0.000] & 0.078 & 0.12 & 0.89 & pass \\
+S10 $N{=}200$ & R3 & 0.017 [0.000, 0.050] & 0.146 & 0.23 & 0.96 & pass \\
+\midrule
+S10 $N{=}145$ & -- & 0.000 [0.000, 0.000] & 0.204 & 0.20 & 0.99 & unscored \\
+\bottomrule
+\end{tabular}
+\caption{The synthetic hidden-timer sweep: 23 cells, 60 test starts in 20 test episodes each. On-time uses the
+criterion's tolerance (2 for R1 and R2, $\max(2,0.1N)$ for R3 and the transition cell). Brackets: 95\% bootstrap CIs
+over test episodes. The detector reproduces the true lag on every test start in every cell (D0). Point estimates
+decide each criterion.}
+\label{tab:timer}
+\end{table}
+
+\paragraph{Verdict: the rule holds partially.}
+\begin{itemize}
+\item \textbf{No model times a period beyond its reach.} All 10 R3 cells pass. Instead of the observer's geometric
+wait, the out-of-reach models mostly \emph{park}: they release in 0.12--0.30 of starts at long periods (C4
+$N\ge33$; C10 and S10 $N\ge65$), against 0.89--0.98 for the observer. This reproduces the Ms.~Pac-Man pen parking in a
+game with no other cause. R3 is one-sided, so it shows that no model beat a blind observer; it does not show that the
+models behave like one.
+\item \textbf{An exact offset gives exact timing when the observer is reliable.} All R1 cells but one pass, and at
+S10 $N{=}17,33,65$ the model is within 0.04 of the observer. At S10 $N{=}65$ the released lags have quartiles
+65/65/65.
+\item \textbf{Two in-reach cells fail.} At S10 $N{=}97$ the model is on time in 0.167 of starts against a bar of
+0.199. The CI contains the bar, but point estimates decide. This is the weakest test in the sweep, flagged before
+training: the $-97$ frame often falls inside the previous stay, so even the observer is on time in only 0.299. At S10
+$N{=}80$, a gap cell, the model releases near $N$ when it releases (lag quartiles 73/76/78.5), but parks in 37 of 60
+starts. Its release fraction is 0.383 $[0.267, 0.500]$ against a bar of 0.494.
+\item R4 holds at $N{=}33$ and $65$ and fails at $97$.
+\end{itemize}
+Reach is therefore necessary but not sufficient at this training budget. A gap, or a far offset that is often masked,
+leads to parking or spread timing, which is a cost of striding.
 
 \paragraph{A real Atari game.}
 \begin{itemize}
@@ -202,7 +266,8 @@ conditioning), if the owner approves and runs it.}
 \begin{itemize}
 \item One game for the main study, 64px frames, one seed per training configuration, and 10 evaluation episodes,
 hence the wide CIs.
-\item The synthetic test isolates timing but has no action conditioning.
+\item The synthetic test isolates timing but has no action conditioning, and uses one seed per cell. Its
+out-of-reach criterion is one-sided, so parking passes it.
 \item The real-game test of the rule stopped at its pilot.
 \item The frightened timer remains unsolved.
 \item Responsiveness on replayed trajectories partly measures how predictable the agent is, not controllability.
