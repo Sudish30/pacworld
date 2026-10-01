@@ -98,6 +98,33 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## STEP 4b STOPPED (2026-10-01): the pre-registered pilot fails, so part b stops before the full runs
+- **The pilot rule** (timer_rule_design.md §9): the first 20k steps of pac-S10 must render the occupied house and
+  release the ghost within the 122-step horizon in **≥ 50%** of val starts, or the project stops.
+- **Result.** pac-S10 at 20k steps (RTX 4090, 9.0 it/s, 37.8 min, val denoise 0.0020; wandb `8o8wylcr`), on 622 val
+  starts in 235 episodes:
+  - **release fraction 0.486 [0.445, 0.525]: FAILS the
+    0.50 bar**;
+  - on-time 0.040 [0.026, 0.056], median |lag − truth|
+    86 steps, early 0.019;
+  - 320 starts parked; released lags have quartiles 45 / 56 / 72 against a truth of 35-36.
+- **It is real model behaviour, not a detector artifact.** Frames at k = 1, 20, 33, 36, 40, 50 for 4 val starts
+  (`logs/pac-S10-pilot_house.png`): in 2 the model keeps a crisp ghost in the house throughout; in 2 the ghost leaves
+  late, around k 40-50. The real game releases at 33-36.
+- **Reading.** After 20k of the planned 115k steps, the strided model has not learned the release. It parks about
+  half the time and is late otherwise, which is the pacworld 4-frame failure, here with S10.
+  - This does not test the rule: the rule is about what a *trained* model can time, and the pilot found the model not
+    yet trained enough by its own registered bar.
+  - Whether 115k steps would fix it is unknown. pacworld's ctx6s16 fixed the Ms. Pac-Man pen at 100k steps on 2.2M
+    frames.
+- **Not run:** pac-C10, the rest of pac-S10, the anneals. The criteria P-S, P-C and P-R remain unscored.
+- **Cost.** The 4090 pod `th9dydo5fauw33` was up about 1.1 h (about $0.80) and is now **stopped**. Recording and cache
+  were on the timer pod's CPU at no extra cost.
+- **wandb.** The pilot run `8o8wylcr` was uploaded from the Mac. An aborted 50-step first attempt on the RTX 2000 Ada
+  (`dmjwh47z`) could not be uploaded because its log was cut off when it was killed.
+- **Owner's decision:** leave part b as a stopped pilot, reported as such; or register a new run (for example the
+  full 115k steps with this pilot as its first 20k, about $4 on a 4090), clearly marked as a second attempt.
+
 ## STEP 4b (2026-09-30): data, frozen split, P-D0 and P-I0, committed before any part-b model trains
 - **Data.** `record.py --config configs/record_pacman.yaml --seed 45`: 2,346 episodes, 1,001,780 steps, random
   play, recorded on the pod CPU.
