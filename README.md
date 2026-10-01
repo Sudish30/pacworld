@@ -4,10 +4,12 @@ A playable neural world model of Ms. Pac-Man: an action-conditioned diffusion mo
 [DIAMOND](https://arxiv.org/abs/2405.12399) that predicts the next frame from the last few frames and the
 player's action. There is no game engine underneath — you play inside the model, in the browser, at 15 fps.
 
-<!-- DEMO GIF SLOT: drop the recording in docs/demo.gif and uncomment.
-     Training also writes a short rollout beside ground truth to outputs/<run>/rollout_<step>.gif.
-![playing inside the model](docs/demo.gif)
--->
+![the real game beside a 4-frame model and the strided-context model, same start and actions](docs/demo.gif)
+
+*One held-out episode, 450 steps (30 s), same start and recorded actions: the real game, a 4-frame model, and the
+strided-context model. The 4-frame model keeps a ghost parked in the pen for 315 steps. This rollout was picked by a
+fixed rule as an example of that failure ([`tools/make_demo_gif.py`](tools/make_demo_gif.py)); the rates are in the
+table below. Both models drift from the real game, as every model here does.*
 
 ## What is here
 

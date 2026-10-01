@@ -27,3 +27,11 @@ pairs:                               # paired differences on the same episodes (
   - [model1, ctx4]                   # 10x data
   - [ctx6s16, ft-uniform]            # LR anneal
 out: eval/results/stats
+demo_gif:                            # tools/make_demo_gif.py: the real game beside two models' rollouts from the same start and actions
+  panels: {ctx4: "4 frames", ft-uniform: "4 + 6 strided"}   # runs above, left to right after the real game
+  pick: {run: ctx4, min_longest: 200}   # the first saved rollout (jobs.csv order) whose longest pen stay in this run is >= this
+  steps: 450
+  fps: 15                            # the game's rate; playback stays real-time
+  frame_stride: 2                    # keep every 2nd frame (halves the file)
+  upscale: 3
+  out: docs/demo.gif

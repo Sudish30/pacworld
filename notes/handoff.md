@@ -125,8 +125,9 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
   the owner's call.
 - **README rewritten** (no GPU): results with episode CIs, the two non-significant claims softened, the timer rule
   with the PARTIAL verdict, DIAMOND, LAM v1 as a negative result. No claims about 4b or LAM v2.
-  - **Still missing: the demo GIF.** No world-model checkpoint is on the Mac; it will be made on the pod during the
-    next pod job (CPU only).
+  - **Demo GIF:** `docs/demo.gif` (`tools/make_demo_gif.py`, settings in `configs/pen_stats.yaml`), built from the
+    saved eval rollouts: real game | ctx4 | ft-uniform, rollout row 0 (episode 240301064, sampler seed 0), chosen by
+    a fixed rule as the first rollout where ctx4 parks 200+ steps (315 here).
 - **DIAMOND detector check** (`eval/ghost_ratio_plot.py`, `docs/ghost_ratio.png`, `eval/results/stats/ghost_ratio.json`):
   - ghosts detected in DIAMOND's generated frames / its own ground truth over steps 1-15: **0.990 [0.974, 1.006]**
     (ours: 1.001 and 1.000), so the later vanishing is not a detector artifact;
