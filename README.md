@@ -39,7 +39,9 @@ around life losses; those are separate failures.) Ms. Pac-Man runs clocks the sc
 stay in the pen after a death (up to 91 steps), and how long a power pellet lasts (124-134 steps). A model that sees
 only its last 4 frames cannot observe them, so it parks the ghosts in the pen. A context with the same kind of
 frames but a longer *reach* (4 recent frames plus 6 frames 16 steps apart, spanning 97 steps) removes the parking.
-The frightened-phase timer is still unsolved.
+The frightened-phase timer is still unsolved. Mixing recent frames with sparser older ones is a known design in video
+models, not something new here; what this repo adds is the measurement of what such a context can and cannot time
+(related work is in the paper draft).
 
 **How the work was done.** The first diagnosis of the parking was exploratory. From the context comparison on, every
 experiment's criterion was written before its result: informally for the context comparison (pen stays should match

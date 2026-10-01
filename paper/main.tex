@@ -50,7 +50,8 @@ how long a ghost has been penned.
 We make four contributions.
 \begin{enumerate}
 \item \textbf{A documented failure and a fix.} With a 4- or 8-frame context, our 18.8M-parameter diffusion model parks
-ghosts in the pen; a strided context with a 97-step reach removes the parking (Sec.~\ref{sec:context}).
+ghosts in the pen; a strided context with a 97-step reach, a known design (Sec.~\ref{sec:related}), removes the
+parking (Sec.~\ref{sec:context}).
 \item \textbf{A testable rule with an ideal-observer prediction,} and a pre-registered synthetic sweep in which it
 holds partially (Sec.~\ref{sec:rule}).
 \item \textbf{A one-variable follow-up} suggesting that timing depends on where the context frames sit, not only on
@@ -377,6 +378,7 @@ surprise in the next frame, and there are up to four of them, so the codes descr
 exists for either version, and we have closed this line of work.
 
 \section{Limitations}
+\label{sec:limits}
 \begin{itemize}
 \item One game for the main study, 64px frames, one seed per training configuration, and 10 evaluation episodes,
 hence the wide CIs.
@@ -389,16 +391,50 @@ noise stream was re-seeded, so it is not bit-identical to one.
 \item The follow-up is one layout, one seed per cell and 60 starts per cell; one of its three off-frame cells is
 marginal.
 \item Many paired comparisons are reported without multiple-comparison correction.
+\item Pre-registration here has limits: the first diagnosis of the parking was exploratory, the context ablation had
+only an informal criterion, the follow-up prediction was suggested by the sweep and registered before the follow-up's own runs, and the
+episode-level intervals were computed after the original runs.
 \item The frightened timer remains unsolved.
 \item Responsiveness on replayed trajectories partly measures how predictable the agent is, not controllability.
 \item The pen-occupancy measure is not resolution-invariant; at 128px its own ground truth differs.
 \end{itemize}
 
 \section{Related work}
-World models for control~\cite{ha2018worldmodels,hafner2023dreamerv3,micheli2023iris}; diffusion world models and
-game engines~\cite{alonso2024diamond,valevski2024gamengen}; latent actions from video~\cite{bruce2024genie};
-quantisation with entropy regularisation~\cite{yu2024magvit2}. \todo{Expand; check for prior work on context reach and
-long-horizon state in video world models.}
+\label{sec:related}
+\paragraph{World models and neural game simulators.} World models were introduced for control
+\cite{ha2018worldmodels,kaiser2019simple,hafner2023dreamerv3,micheli2023iris}. Learned simulators that are meant to be
+played include GameGAN~\cite{kim2020gamegan}, whose memory module keeps revisited places visually consistent, and the
+diffusion models DIAMOND~\cite{alonso2024diamond} and GameNGen~\cite{valevski2024gamengen}, on which our model is based.
+These works evaluate visual quality, agent return or consistency when revisiting places; we evaluate whether a hidden game
+clock is kept over hundreds of steps.
+
+\paragraph{Memory and long context in video world models.} A growing line of work extends what a video model can
+remember: training schemes for long rollouts and variable-length history
+\cite{chen2024diffusionforcing,song2025history}, state-space and memory-bank architectures
+\cite{po2025longcontext,xiao2025worldmem,lee2025edeline}, retrieval of relevant past frames \cite{yu2025contextmemory,chen2025vrag}, and
+compressed or non-uniform history contexts \cite{zhang2025framepack,gu2025far}. A context that mixes recent frames with
+sparser older ones is therefore not new, and we do not claim the strided context as a contribution. These methods are
+evaluated mostly on spatial or scene consistency. Closest to our question, Shin et al.~\cite{shin2026unobserved} show
+that standard video world model architectures trained on short shell-game swap chains fail to track the hidden
+object's position on longer chains, and that only architectures that carry a revisable state generalise. Related
+benchmarks and methods ask whether hidden scene state keeps evolving out of view~\cite{ma2026stevo,duan2026liveworld}. To our knowledge, no prior work studies elapsed-time tracking in a learned game simulator, relates timing
+accuracy to where the context frames sit, or scores a model against an observer restricted to the same context
+offsets; we did not find such work, but our search was not exhaustive.
+
+\paragraph{Partial observability.} That a short stack of frames makes Atari only approximately Markov is well known:
+recurrent agents were proposed as an alternative to frame stacking~\cite{hausknecht2015drqn}, and benchmarks isolate
+memory in agents~\cite{pasukonis2022memorymaze,morad2023popgym}. Convolutional sequence models reach long histories
+with dilated convolutions~\cite{bai2018tcn}, an idea close to a strided context. Our contribution here is a measurement in
+a generative world model, not a new memory mechanism.
+
+\paragraph{Latent actions.} Genie~\cite{bruce2024genie} and LAPO~\cite{schmidt2023lapo} learn discrete latent actions
+from video. Nikulin et al.~\cite{nikulin2025latent} show that such models degrade when the video contains
+action-correlated distractors and that a small amount of action supervision (2.5\% of the data) improves them substantially. Our second negative result,
+codes captured by the ghosts, is consistent with their finding and is not a new failure mode. Our quantiser uses the
+entropy term of MAGVIT-v2~\cite{yu2024magvit2}.
+
+\paragraph{Method.} Pre-registration for predictive modelling has been proposed as a guard against flexible
+analysis~\cite{hofman2023preregistration}; we used it, with the limits stated in Sec.~\ref{sec:limits}.
 
 \bibliographystyle{plainnat}
 \bibliography{refs}

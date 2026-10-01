@@ -123,6 +123,25 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## Related work written; arXiv bundle script; seed replication launched (2026-10-01)
+- **Related work** (`paper/main.tex`, 21 new references in `refs.bib`). A literature agent verified each paper on
+  arXiv; review 3 (APPROVE WITH CHANGES, applied) re-checked 10 of them, corrected four descriptions and added three
+  close papers (STEVO-Bench, LiveWorld, EDELINE). No paper TODO remains.
+  - **Novelty, as now worded:** strided / sparse history contexts are a known design and are not claimed. Hidden-state
+    tracking failures in video world models are known (Shin et al. 2026). What we did not find in prior work:
+    elapsed-time tracking in a learned game simulator, timing vs where the context frames sit, and scoring against an
+    observer limited to the same offsets ("to our knowledge", search not exhaustive).
+  - The LAM v2 result is described as consistent with Nikulin et al. (ICML 2025: latent actions need supervision when
+    distractors are present), not as a new failure mode.
+  - Venues were not all confirmed, so most new entries cite the arXiv id.
+- **arXiv bundle:** `bash tools/make_arxiv_bundle.sh` builds `paper/arxiv.tar.gz` (main.tex, main.bbl, refs.bib,
+  ghost_ratio.png; compiles on its own; untracked). Submission is the owner's step.
+- **Seed replication is running** on pod `fw39kyaqi4rh9j` (`pacworld-seeds`, RTX 2000 Ada, $0.24/h), code checksums
+  matched. Balance before: $20.96.
+  - **Mistake:** my launcher script mis-read the pod-create output, so its retry loop created a second pod. I killed
+    the script and deleted the duplicate (`gr7uie9b5ug2g7`) within a few minutes; cost a few cents. Lesson: check
+    `runpodctl pod list` instead of parsing the create output in a loop.
+
 ## PRE-REGISTERED 2026-10-01: training-seed replication of the follow-up (`notes/timer_rule_design.md` section 12)
 - Proposed by review 1; design reviewed (review 2: APPROVE WITH CHANGES, all four applied: the verdict script accepts
   only fully trained models of the right seed on the same test set; stages scored separately; the margin of claim A
