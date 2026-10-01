@@ -1,10 +1,15 @@
-gymnasium[atari]
-torch
-numpy
-imageio
-wandb
-stable-baselines3
-huggingface_hub
-fastapi
-uvicorn[standard]
-matplotlib
+# Versions that actually ran: read from the training environment on the GPU pod on 2026-10-01
+# (Python 3.12.3; torch is its CUDA 13 build).
+gymnasium[atari]==1.3.0
+ale-py==0.12.1
+torch==2.14.0
+numpy==2.5.3
+imageio==2.37.4
+pillow==12.3.0
+pyyaml==6.0.3
+wandb==0.30.0
+stable-baselines3==2.9.0
+huggingface_hub==1.31.0
+fastapi==0.141.1
+uvicorn[standard]==0.53.0
+matplotlib==3.11.2

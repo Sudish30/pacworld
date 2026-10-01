@@ -98,6 +98,23 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## OWNER DECISIONS after the stops (2026-10-01) and what was done
+- **Learned controls are closed. No v3.** v1 and v2 are reported as negative results with their mechanisms.
+- **README updated for the owner's review** (not pushed): an "In short" section; "a major long-horizon failure";
+  no public live demo; 18.8M everywhere; pen-table CI labels; a multiple-comparisons caution; the 23rd (unscored
+  transition) cell added to the timer table; the rule quoted verbatim from the pre-registration; the follow-up, part
+  b attempt 2 (with the −33/−49 reading marked post-hoc and the resume note) and LAM v2 added.
+- **Training times checked against this file:** 100k steps at 64px took 179.6-302 min on 4090s (Model 1 198 min, ctx4
+  179.6, r148 245, ctx8 270.4, ctx6s16 302.0); 128px took 490 min plus a 74-min anneal. The README now gives
+  3.0-5.0 h and 8.2 h.
+- **`requirements.txt` is pinned** to the versions on the volume's training environment (read from a short-lived CPU
+  pod; the full freeze is in `logs/pod/pip_freeze.txt`, untracked).
+- **Paper updated the same way**, with the story led by the timer-offset finding; it compiles
+  (`cd paper && ../.venv/bin/tectonic main.tex`). One TODO remains: related work.
+- **Pods deleted at the owner's request:** `e6ip83c50b2gr0`, `076wd0s1jsiw49`, `th9dydo5fauw33`, and the CPU pod used
+  for the freeze. No pod exists; the network volume `v3kyag5rhv` keeps all data. Balance $21.01.
+- **Still the owner's:** clearing the README for the push of `main`.
+
 ## STOP (2026-10-01): two pre-registered gates failed. Part b is closed for good; the LAM v2 pilot fails
 
 ### Part b, attempt 2: P-S FAILS, so part b stops for good (owner's rule); pac-C10 was not trained

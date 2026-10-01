@@ -2,7 +2,24 @@
 
 A playable neural world model of Ms. Pac-Man: an action-conditioned diffusion model in the style of
 [DIAMOND](https://arxiv.org/abs/2405.12399) that predicts the next frame from the last few frames and the
-player's action. There is no game engine underneath — you play inside the model, in the browser, at 15 fps.
+player's action. There is no game engine underneath: when the model is served on a GPU, you play inside it in the
+browser at 15 fps. There is no public live demo; the code to serve it yourself is below.
+
+## In short
+
+- **What it is.** A neural network that has learned to draw Ms. Pac-Man frame by frame from watching the game. Given
+  the last few frames and a key press, it draws the next frame, so the game can be played inside the network.
+- **The main finding.** The network can only keep time using the past frames it is shown. The game holds ghosts in
+  their pen for a fixed time with no countdown on screen. A network that sees only the last 4 frames cannot tell
+  how long a ghost has waited, and leaves it parked there. Showing it a few older frames as well removes the parking.
+- **The follow-up.** In a small test game, a network timed a hidden 80-step wait correctly only when one of its past
+  frames sat exactly 80 steps back. Moving that one frame by a single step (from 81 back to 80) took it from parking
+  in 37 of 60 tries to parking in none.
+- **What failed.** The same idea on a second real game gave a model that releases the ghost but at the wrong time.
+  Two attempts to learn the controls from video alone, without key-press labels, failed. A prediction about another
+  team's model (DIAMOND) was wrong. A second hidden timer in Ms. Pac-Man is still unsolved.
+- **How to read the numbers.** Every test's pass/fail rule was written down before its result existed, and failed
+  tests are reported as failures.
 
 ![the real game beside a 4-frame model and the strided-context model, same start and actions](docs/demo.gif)
 
@@ -13,12 +30,12 @@ table below. Both models drift from the real game, as every model here does.*
 
 ## What is here
 
-The model is a 19M-parameter EDM diffusion UNet over the noisy next frame plus its context frames, conditioned on
+The model is an 18.8M-parameter EDM diffusion UNet over the noisy next frame plus its context frames, conditioned on
 the actions, at 64x64. Everything else in the repo exists to answer one question: *how far can you walk around
 inside it before the world stops making sense?*
 
-**The main finding: the long-horizon failures are hidden timers.** Ms. Pac-Man runs clocks the screen does not
-show: how long ghosts stay in the pen after a death (up to 91 steps), and how long a power pellet lasts (124-134
+**The main finding: a major long-horizon failure is hidden timers.** (Ghosts are also lost to sampler drift and
+around life losses; those are separate failures.) Ms. Pac-Man runs clocks the screen does not show: how long ghosts stay in the pen after a death (up to 91 steps), and how long a power pellet lasts (124-134
 steps). A model that sees only its last 4 frames cannot observe them, so it parks the ghosts in the pen. A context
 with the same kind of frames but a longer *reach* (4 recent frames plus 6 frames 16 steps apart, spanning 97 steps)
 removes the parking. The frightened-phase timer is still unsolved.
@@ -33,13 +50,15 @@ over held-out *episodes*, not rollouts. The full log is [`notes/handoff.md`](not
 Rollouts of 450 steps (30 s) from 10 held-out episodes x 3 sampler seeds, replaying the recorded actions
 ([`eval/eval_rollouts.py`](eval/eval_rollouts.py)). Brackets are 95% CIs over the 10 episodes
 ([`eval/bootstrap_ci.py`](eval/bootstrap_ci.py), [`eval/pen_bootstrap.py`](eval/pen_bootstrap.py)). With 10
-episodes the intervals are wide, and several differences that look real in the point estimates are not.
+episodes the intervals are wide, and several differences that look real in the point estimates are not. Many
+paired comparisons are reported and none is corrected for multiple comparisons, so treat intervals that barely
+exclude zero with caution.
 
 ### The pen timer
 
 How long the ghost pen stays occupied in a 450-step rollout:
 
-| model | context | rollouts parked 200+ steps | longest pen stay, median |
+| model | context | rollouts parked 200+ steps: count [95% CI of the parked fraction] | longest pen stay, median [95% CI] |
 |---|---|---|---|
 | real game | - | 0 / 30 | 78 |
 | Model 1 (200k frames) | 4 consecutive | 16 / 30 [0.37, 0.70] | 222 [188, 299] |
@@ -90,11 +109,20 @@ they are in the handoff.
 
 ## The hidden-timer rule, tested on a synthetic game
 
-**The rule.** A frame model can time a hidden event of period N only as precisely as its context offsets resolve −N:
-exactly if a context frame sits at −N, spread out if −N falls between two context frames, and not at all if N is
-beyond the reach.
+**The rule, as pre-registered** (quoted from [`notes/timer_rule_design.md`](notes/timer_rule_design.md), committed
+before any synthetic run; "offsets" are how many steps back each context frame sits, R is the reach):
 
-**The test** ([`notes/timer_rule_design.md`](notes/timer_rule_design.md), [`timer_game.py`](timer_game.py)). A 16x16
+> An autoregressive frame model that only sees its context can time a hidden-timer event of period N only as
+> precisely as its context offsets resolve −N.
+> - If −N is one of its offsets, timing is exact.
+> - If −N falls between two offsets inside the reach R, the timing is spread over that gap.
+> - If N > R, the timing is lost. The best possible behaviour is then a constant hazard: a geometric wait with the
+>   right mean and a spread of about N − R. A sampling model may do worse and park.
+> - A strided context moves the failure point from N ≈ K (frame count) to N ≈ R (reach), at the price of gaps.
+
+The rule was written after the Ms. Pac-Man pen results above and before the synthetic test below.
+
+**The test** ([`timer_game.py`](timer_game.py)). A 16x16
 game holds a ghost in a pen for exactly N frames with nothing on screen showing the elapsed time. 23 small models
 cross three context layouts (4 consecutive, 10 consecutive, and the strided 10-frame layout) with N from 3 to 200.
 Each is compared with an *ideal observer* limited to the same context offsets, computed before any model trained.
@@ -106,6 +134,10 @@ Each is compared with an *ideal observer* limited to the same context offsets, c
 | 10 with N beyond the reach | no better than an observer that cannot see the capture | **10 / 10 pass** |
 | 9 with a context frame exactly at −N | on-time fraction near the ideal observer's | **8 / 9 pass** |
 | 3 with −N between two context frames | releases about as often and as accurately as the observer | **2 / 3 pass** |
+| 1 with N just beyond the reach (between 1 and 1.5 times the reach) | nothing: registered as a transition zone, reported only | not scored |
+
+That is all 23 cells: 22 scored and 1 reported. The unscored cell (N = 145, strided layout) parked in 48 of 60
+starts.
 
 - **Beyond the reach, no model timed anything.** They mostly park instead: they release in 0.12-0.30 of starts at
   long periods, where the ideal observer releases in 0.89-0.98. This reproduces the Ms. Pac-Man pen parking in a game
@@ -121,6 +153,55 @@ Each is compared with an *ideal observer* limited to the same context offsets, c
     a bar of 0.49.
 
 The per-cell table is in the handoff and the paper draft.
+
+### Follow-up: moving one frame fixes N = 80
+
+Pre-registered after the sweep, before it ran. One variable changed: the strided layout's frame at −81 was moved to
+−80 (same reach, same number of frames). The prediction: a period that lands on a frame passes, and periods between
+frames park. **Verdict: supported, as registered.**
+
+| period N | where −N falls | on time | released [95% CI] | ideal observer releases | parked | result |
+|---|---|---|---|---|---|---|
+| 80 | exactly on a frame | 0.65 [0.53, 0.77] (ideal 0.72; bar 0.62) | 1.00 | 1.00 | 0 / 60 | **passes** |
+| 72 | mid-gap | 0.23 | 0.78 [0.70, 0.87] (bar 0.80) | 0.90 | 13 / 60 | **parks** |
+| 79 | end of a gap | 0.12 | 0.35 [0.25, 0.45] (bar 0.49) | 0.59 | 39 / 60 | **parks** |
+| 88 | mid-gap | 0.18 | 0.55 [0.42, 0.67] (bar 0.77) | 0.87 | 27 / 60 | **parks** |
+
+- **With the frame at −81, the N = 80 model parked in 37 of 60 starts. With it at −80, it parks in none**, and the
+  middle half of its releases land at 80-81 steps.
+- **N = 72 is marginal.** It missed its bar by one start (47 of 60 released; 48 were needed), and its interval
+  contains the bar. N = 79 and N = 88 fail clearly.
+- **Caveat: short gaps did not park.** In the main sweep, the two short between-frames periods (N = 8 and N = 24)
+  released in 1.00 and 0.82 of starts and passed. So "between frames parks" holds for the far frames here, not for
+  every gap. That comparison across the two experiments is an observation, not a registered test.
+- The ideal observer predicted the ordering (79 worst), but the models park more than it does in every gap cell.
+
+## A second real game: the test failed on timing
+
+The 2600 Pac-Man (a different game from Ms. Pac-Man) holds a ghost in its house for exactly 35 or 36 steps after
+every death, with no countdown on screen. The registered test: the strided model must release about as often and as
+accurately as an ideal observer with the same frames, and a 10-consecutive-frame model must do no better than a
+blind observer. The strided model's result was the gate for training the second model.
+
+| strided model | released [95% CI] | median timing error | on time | parked (of 622) |
+|---|---|---|---|---|
+| attempt 1, stopped at its 20k-step pilot | 0.49 [0.45, 0.53] | 86 | 0.04 | 320 |
+| attempt 2 at 100k steps (reported only) | 0.68 [0.64, 0.72] | 65 | 0.03 | 200 |
+| **attempt 2 at 115k steps (the gate)** | **0.986 [0.976, 0.994]** | **12 [10, 13]** | 0.22 [0.18, 0.25] | 9 |
+| ideal observer with the same frames | 0.998 | 2 | 0.89 | - |
+| bar | ≥ 0.898: pass | ≤ 5: **fail** | - | - |
+
+- **Failed, as registered.** The trained model releases the ghost but does not time it: half of its releases fall
+  outside 33-72 steps, against a true 35-36.
+- **The 10-consecutive-frame model was never trained**, so the contrast between layouts on a real game was not
+  measured, and the rule was not confirmed on a second real game.
+- **Post-hoc reading, not a registered test:** the 35-36-step stay falls between the strided layout's frames at −33
+  and −49, which is where the synthetic follow-up found parking and loose timing. This is consistent with the
+  follow-up; it was not predicted in advance for this game.
+- Attempt 1 stopped at a registered 20k-step pilot (released 0.49, below its 0.50 bar). Attempt 2 was registered
+  separately as the full run with the same bars. Its training was resumed once from the pilot's checkpoint: same
+  learning rate, weights and optimizer state as an uninterrupted run, but a re-seeded random stream, so it is not
+  bit-identical to one. One game, one seed, random-play data.
 
 ## External reference point: DIAMOND's released model
 
@@ -160,20 +241,26 @@ vanish:
 
 A 450-step rollout is 30 times DIAMOND's design horizon.
 
-## Learned controls (latent actions): a negative result
+## Learned controls (latent actions): two negative results
 
 We tried a Genie-style extension: a latent action model that infers 8 discrete codes from frames alone, so the world
 model could be trained without action labels ([`notes/latent_actions_design.md`](notes/latent_actions_design.md),
-[`lam.py`](lam.py)). Two variants were trained: one generic, and one that weights its reconstruction loss around
-Pac-Man using the pixel detector. The detector uses no action labels or RAM, but it does tell that variant which
-sprite is the player.
+[`notes/lam_v2_design.md`](notes/lam_v2_design.md), [`lam.py`](lam.py)). Both versions weight the reconstruction loss
+around Pac-Man using the pixel detector (v1 also had a generic variant). The detector uses no action labels or RAM,
+but it does tell the model which sprite is the player. This line of work is closed.
 
-**Both collapsed.** Each ended on one or two codes, and the decoder ignored the code: shuffling the codes did not
-change its error (code gain x1.000). The pre-registered stop fired before any action label was read, so there is no
-controllability result to report.
+| | what happened | registered check that failed |
+|---|---|---|
+| **v1** | Collapsed to one or two codes, and the decoder ignored the code: shuffling codes did not change its error (code gain x1.000). | the label-free checks, before any action label was read |
+| **v2** | The collapse was fixed: all 8 codes in use (perplexity 7.42), and the decoder used them (code gain x1.020). But the codes described the ghosts: their effect on the output was 0.400 near ghosts and 0.067 near Pac-Man (shares of the total). | the 2,500-step pilot's third condition (Pac-Man share > ghost share) |
 
-**Likely cause:** the decoder predicted the next frame well from its 97-step context alone, in part because the
-recording agent's moves are predictable from the screen.
+- **v1's mechanism.** The decoder saw 97 steps of context and predicted the next frame well without the code.
+- **v2's changes.** A decoder that sees only the last frame, a code-usage entropy term, a stronger code path, and
+  non-zero initial code influence. Its pilot stopped the run after 2,500 of 30,000 steps.
+- **Root cause, as we read it.** The data comes from a single recording agent, whose moves are largely predictable
+  from the screen, so a code has little to add about Pac-Man. With a short context, the ghosts are the biggest
+  surprise in the next frame, and there are up to four of them, so the codes spend themselves there.
+- No controllability result exists for either version: no action label was ever read.
 
 ## Repository layout
 
@@ -192,7 +279,8 @@ train_model1.py      training loop: EMA, context-noise augmentation, periodic va
 serve/               the playable demo: FastAPI + WebSocket server, browser canvas, a watchdog that starts a
                      fresh board when the model loses Pac-Man
 timer_game.py        the synthetic hidden-timer game; train_timer.py and eval/timer_eval.py train and score it
-lam.py, train_lam.py the latent action model (negative result, see above)
+eval/pacman_house.py the second real game (2600 Pac-Man ghost house)
+lam.py, train_lam.py the latent action model (negative results, see above)
 eval/                the measurement stack. detectors.py finds sprites, pellets and walls in a generated
                      frame and is validated against native-resolution truth; eval_rollouts.py scores
                      rollouts; the rest diagnose specific failures (pen timer, ghost loss, drift, freezes)
@@ -260,9 +348,10 @@ RTX 4090, which holds the 15 fps the game was recorded at.
 
 ## Requirements
 
-A CUDA GPU for training (the runs here are on a single RTX 4090; 100k steps at 64x64 takes about 3.3 h, and the
-128x128 variant about 8 h). Recording, playback and the detectors are CPU-only. `requirements.txt` pins nothing;
-it was developed against PyTorch 2.14 + CUDA 13, gymnasium with `ale-py`, and Python 3.12.
+A CUDA GPU for training. Measured on single RTX 4090s: 100k steps at 64x64 took 3.0-5.0 h depending on the context
+layout and the host (3.3 h for the 4-frame Model 1, 5.0 h for the strided run on a slower host), and the 128x128
+variant took 8.2 h. Recording, playback and the detectors are CPU-only. `requirements.txt` pins the versions that
+ran on the training machine (Python 3.12, PyTorch 2.14 with CUDA 13).
 
 ## License
 
