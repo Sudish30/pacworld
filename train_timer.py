@@ -47,6 +47,8 @@ def main():
         if v is not None:
             tr[k] = v
     cells = cfg["grid"].get(a.layout, []) + cfg.get("followup_grid", {}).get(a.layout, [])
+    if a.seed and a.seed not in cfg.get("seed_replication", {}).get("cells", {}).get(f"{a.layout}:{a.N}", []):
+        raise SystemExit(f"training seed {a.seed} is not registered for {a.layout} N={a.N} (seed_replication.cells)")
     if a.N not in cells:
         raise SystemExit(f"N={a.N} is not a pre-registered cell of {a.layout}")
     offsets = cfg["layouts"][a.layout]
@@ -71,9 +73,9 @@ def main():
     print(f"{a.layout} N={a.N}: {len(train)} train windows, {count_params(model) / 1e6:.2f}M params on {device}; train sha256 {train_sha[:16]}")
 
     import wandb
-    run = wandb.init(project=tr["wandb_project"], group=tr["wandb_group"], name=f"timer-{a.layout}-N{a.N}", mode=a.wandb_mode,
+    run = wandb.init(project=tr["wandb_project"], group=tr["wandb_group"], name=f"timer-{a.layout}-N{a.N}" + (f"-s{a.seed}" if a.seed else ""), mode=a.wandb_mode,
                      config={**mcfg, "seed": a.seed, "params": n_params})
-    ck = Path(a.checkpoint or Path(tr["checkpoint_root"]) / f"{a.layout}-N{a.N}" / "model.pt")
+    ck = Path(a.checkpoint or Path(tr["checkpoint_root"]) / (f"{a.layout}-N{a.N}" + (f"-s{a.seed}" if a.seed else "")) / "model.pt")   # seed 0 keeps the original path
     ck.parent.mkdir(parents=True, exist_ok=True)
     gen = torch.Generator().manual_seed(a.seed)
     d, ccfg = cfg["diffusion"], cfg["ctx_noise"]

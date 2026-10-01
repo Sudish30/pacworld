@@ -95,6 +95,9 @@ def main():
     p.add_argument("--seed", type=int, required=True)
     p.add_argument("--ideal-only", action="store_true")
     p.add_argument("--checkpoint", help="default <checkpoint_root>/<layout>-N<N>/model.pt")
+    p.add_argument("--train-seed", type=int, default=0, help="score the model trained with this seed (seed replication, design\n"
+                   "section 12): checkpoint <layout>-N<N>-s<S>/model.pt, output <layout>-N<N>-s<S>.json. --seed (starts, sampler,\n"
+                   "observer draws) stays the evaluation seed")
     a = p.parse_args()
     cfg = load_config(ROOT / a.config)
     g, e = cfg["game"], cfg["eval"]
@@ -131,12 +134,13 @@ def main():
     if not a.ideal_only:
         from train_model0 import pick_device
         device = pick_device(cfg["train"]["device"])
-        ck = Path(a.checkpoint or ROOT / cfg["train"]["checkpoint_root"] / f"{a.layout}-N{N}" / "model.pt")
+        tag = f"-s{a.train_seed}" if a.train_seed else ""
+        ck = Path(a.checkpoint or ROOT / cfg["train"]["checkpoint_root"] / f"{a.layout}-N{N}{tag}" / "model.pt")
         lags, step = model_lags(ck, test, starts, horizon, offsets, cfg, device, a.seed)
         res["model"] = metrics(lags, ep_of, N, horizon, tols, e["bootstrap"], a.seed)
         res["model"]["lags"] = lags.tolist()
         res["model_checkpoint"], res["model_step"] = str(ck), step
-    out = ROOT / e["out_dir"] / f"{a.layout}-N{N}{'-ideal' if a.ideal_only else ''}.json"
+    out = ROOT / e["out_dir"] / f"{a.layout}-N{N}{'-ideal' if a.ideal_only else ''}{f'-s{a.train_seed}' if a.train_seed and not a.ideal_only else ''}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     json.dump(res, open(out, "w"), indent=2)
     show = lambda m: {k: round(v, 3) for k, v in m["point"].items()}

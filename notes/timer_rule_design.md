@@ -327,3 +327,54 @@ Reported, not gating: pac-S10 scored at 100k steps (before the anneal); C10's pa
 - **Cost** on an RTX 4090 ($0.74/h, 9.0 it/s measured): S10 needs 95k more steps, about 2.9 GPU-hours, **about $2.2**.
   C10 needs 115k steps, about 3.6 GPU-hours, **about $2.6**, spent only if P-S passes. Total at most **about $5**
   with scoring.
+
+## 12. Training-seed replication of the follow-up. PRE-REGISTRATION (2026-10-01, before any replication run)
+
+**Why.** Every synthetic cell so far was trained once (seed 0). The headline of the follow-up (N=80: 37 of 60 starts
+parked with the frame at −81, none with it at −80) and the observation "far gaps park, near gaps do not" each rest
+on one training run per cell. This checks whether they survive a change of training seed. It was proposed by the
+reviewer (review 1, `notes/handoff.md`).
+
+**One variable: the training seed.** Everything else is held fixed: game data (generated from fixed seeds), layouts,
+15k steps, model, test starts, evaluation seed 0 (sampler noise and observer draws), ideal observers and bars. The
+training seed sets the weight initialisation, the batch order and the training noise.
+
+**Cells and seeds** (`seed_replication` in `configs/timer.yaml`; 18 new runs):
+- **Stage 1, the headline pair:** S10 N=80 and S10b N=80, new seeds 1-4 (8 runs).
+- **Stage 2, the gap pattern:** far gaps S10b N=72, 79, 88 and near gaps S10 N=8, 24, new seeds 1-2 (10 runs).
+
+**Scoring** (`tools/timer_seeds_verdict.py`, written before any result). Bars are those already registered: R1 for the
+on-frame cell (S10b N=80: on-time ≥ 0.616); a gap cell **parks** if its release fraction is below its R2 release bar
+(S10 N=80: 0.494; S10b N=72: 0.798; N=79: 0.494; N=88: 0.774; S10 N=8: 0.855; N=24: 0.791). Point estimates decide.
+Seed 0 is listed for reference and never counts toward a replication verdict.
+
+- **Stage 1.** Claim A: S10b N=80 passes R1. Claim B: S10 N=80 parks.
+  - **REPLICATES** if A and B each hold in at least 3 of the 4 new seeds.
+  - **DOES NOT REPLICATE** if either holds in at most 1 of 4.
+  - **MIXED** otherwise.
+- **Stage 2.** **PATTERN HOLDS** if at least 5 of the 6 far-gap runs park and at least 3 of the 4 near-gap runs do
+  not park; otherwise **PATTERN DOES NOT HOLD**.
+- Every seed is reported with its on-time fraction, release fraction and CI, whatever the verdict.
+
+**What this cannot change.** The sweep verdict (PARTIAL) and the follow-up verdict (SUPPORTED) stay as registered
+and scored. This run adds a statement about seed-to-seed robustness beside them. If it does not replicate, the
+README and paper say so and the follow-up claim is weakened accordingly.
+- The seeds and cells are fixed; no seeds or cells are added after any result, including MIXED.
+- MIXED is reported in the README and paper as not replicated, with each seed's counts.
+- Each stage is scored on its own files, so stage 1 can be scored if stage 2 cannot finish.
+
+**Pre-spend check.**
+- (a) Most likely failure: seed variance is large for cells near a bar. S10b N=72 missed its bar by one start, and
+  S10 N=24 passed by two (0.817 vs 0.791), so stage 2 may come out "does not hold" from those two cells alone. In
+  stage 1, claim B has a wide margin at seed 0 (release 0.383 against a bar of 0.494), but claim A does not: S10b
+  N=80 passed R1 by about 2 of 60 starts (0.650 against 0.616). Claim A is as fragile as those two cells, even though
+  that model parked in none of its starts.
+- (b) Cheapest test: the pipeline is the one that produced all 27 earlier cells; the new code path (seed-tagged
+  checkpoint and result names) is checked on the Mac CPU with a short run before the pod starts. That run's checkpoint
+  and result file are deleted afterwards, and the verdict script only accepts results from fully trained (15k-step)
+  models of the right seed scored on the same test set as seed 0. No cheaper GPU test
+  than the cells themselves exists (about $0.10 each).
+- (c) Differences from the original experiments: the training seed only. Same GPU type and parallelism as the
+  original sweep; GPU nondeterminism is part of what the seed varies.
+- **Abort rule:** only for pipeline failure (D0 fails, NaN loss, a file cannot be loaded). Never on results.
+- **Cost:** 18 cells x 15k steps, about 0.375 GPU-hours each on an RTX 2000 Ada ($0.24/h): **about $2 with overhead**.

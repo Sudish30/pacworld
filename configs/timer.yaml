@@ -38,6 +38,23 @@ grid:                                  # the 23 pre-registered cells
 followup_grid:                         # the 4 cells of the follow-up (design section 10); scored by tools/timer_followup_verdict.py
   S10b: [72, 79, 80, 88]               # 80 = on a frame; 72, 79, 88 = between frames
 
+seed_replication:                      # training-seed replication (design section 12); scored by tools/timer_seeds_verdict.py
+  cells:                               # "layout:N" -> the NEW training seeds (seed 0 = the original, already scored)
+    "S10:80": [1, 2, 3, 4]             # stage 1, the headline pair: frame at -81 ...
+    "S10b:80": [1, 2, 3, 4]            #          ... against frame at -80
+    "S10b:72": [1, 2]                  # stage 2: far gaps
+    "S10b:79": [1, 2]
+    "S10b:88": [1, 2]
+    "S10:8": [1, 2]                    # stage 2: near gaps
+    "S10:24": [1, 2]
+  stage1: ["S10:80", "S10b:80"]
+  min_replicate: 3                     # stage 1 REPLICATES if each claim holds in >= this many of the 4 new seeds
+  max_fail: 1                          # ... DOES NOT REPLICATE if either holds in <= this many
+  far_gaps: ["S10b:72", "S10b:79", "S10b:88"]
+  near_gaps: ["S10:8", "S10:24"]
+  far_min_park: 5                      # stage 2 pattern holds if >= this many of the 6 far-gap runs park ...
+  near_min_release: 3                  # ... and >= this many of the 4 near-gap runs do not park
+
 model:                                 # pacworld's UNet, small and unconditional
   widths: [64, 128]                    # 16 -> 8 px
   blocks_per_level: 2

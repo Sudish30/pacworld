@@ -123,6 +123,14 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## PRE-REGISTERED 2026-10-01: training-seed replication of the follow-up (`notes/timer_rule_design.md` section 12)
+- Proposed by review 1; design reviewed (review 2: APPROVE WITH CHANGES, all four applied: the verdict script accepts
+  only fully trained models of the right seed on the same test set; stages scored separately; the margin of claim A
+  stated honestly; no seeds added after any result, MIXED reported as not replicated).
+- 18 new runs: S10 N=80 and S10b N=80 with seeds 1-4; S10b N=72/79/88 and S10 N=8/24 with seeds 1-2. Only the
+  training seed changes. Stage 1 REPLICATES if "S10b N=80 passes R1" and "S10 N=80 parks" each hold in ≥ 3 of 4.
+- Cost about $2. Run: `JOBS=3 bash tools/timer_seeds.sh`, then `tools/timer_seeds_verdict.py`.
+
 ## REVIEW 1 (2026-10-01, research-reviewer): APPROVE WITH CHANGES on the pushed README/paper; all changes applied
 The reviewer agent type could not be loaded in the running session (agent files load at session start), so a
 read-only general-purpose agent on Opus was given `.claude/agents/research-reviewer.md` as its role. It checked every
