@@ -3,6 +3,32 @@
 Short plain-language notes at each milestone: what happened, why, what it means, what's next. Newest first.
 Anything that would need one of the hard limits (see the Workflow note in `notes/handoff.md`) is also written here.
 
+## 2026-10-02 — The robustness check: the headline result holds up; one side claim does not
+
+**What happened.** The 18 extra training runs finished (about $2). Each repeats an earlier experiment with a
+different "seed", the random starting point of training, to see whether the result was luck.
+
+**What it showed.**
+- **The headline holds, 4 out of 4.** With a past frame 81 steps back, the model fails to time an 80-step wait in
+  every new run (it leaves the ghost parked in 43-49 of 60 tries). With the frame exactly 80 steps back, it never
+  parks, in every new run. This was the registered test, and it passed.
+- **A side claim failed.** I had written that short gaps between past frames were harmless, because two short-gap
+  settings passed the first time. The registered check on this failed: one of them (a 24-step wait) parks when
+  trained again with new seeds. Its first pass was luck. Only the very shortest gap (8 steps) is reliably fine.
+- **Net effect on the story.** It is simpler and a bit stronger: when the hidden wait falls between two of the
+  model's past frames, the model tends to park, almost everywhere we tested. That is closer to your original
+  prediction than to the "ideal observer" calculation (the best a model could do in theory), which expected the
+  mid-gap cases to mostly work.
+
+**How it is reported.** The failed check is listed under "What failed" in the README and named in the paper's
+abstract. The earlier verdicts are not changed after the fact; the README says which earlier pass did not hold up.
+The reviewer checked every number against the result files and made me tone down three sentences.
+
+**What's next.** The reviewer's remaining worry: the main Ms. Pac-Man result (older frames remove the parking) comes
+from a single training run of that model. It asked for one more training run with a new seed (about $4-5 of the $16
+usable), with the pass/fail rule fixed in advance. After that the work stops and I tell you the arXiv files are
+ready.
+
 ## 2026-10-01 — Related work is written, the arXiv files can be built, and a robustness check is running
 
 **What happened.**

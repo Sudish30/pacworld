@@ -28,7 +28,10 @@ offsets, the rule holds \emph{partially}: no model times a period beyond its rea
 at $-N$ match the observer at three of four long periods, but one of three periods between two frames ($N{=}80$) parks. A follow-up,
 pre-registered after that result, changes one offset: moving a frame from $-81$ to $-80$ takes the $N{=}80$ model from parking in 37 of 60
 starts to parking in none, while three periods between frames of the new layout park more than the observer allows
-(one of them by a single start).
+(one of them by a single start). A pre-registered
+replication with four new training seeds reproduces both halves of the $N{=}80$ result in each of the four new
+seeds. Its second registered stage failed: one short between-frames period that had passed in the sweep ($N{=}24$)
+parks under both new seeds.
 On a second real game (the 2600 Pac-Man) the registered test failed: the strided model releases the ghost in 0.99
 of starts but with a median timing error of 12 steps against a bar of 5. The hidden period there falls between two
 context frames, which is consistent with the synthetic finding but was not a registered prediction.
@@ -36,8 +39,8 @@ We also report failed predictions and negative results in full: DIAMOND's releas
 parking them; two latent-action models trained without labels fail, the first by ignoring its codes and the second by
 spending them on ghosts; and several earlier claims do not survive episode-level confidence intervals.
 From the context ablation on, every experiment's criterion was written before its result (the ablation's
-informally, and the strided model missed its ``max about 91 steps'' part with a longest stay of 148); the first diagnosis was exploratory, and the episode-level intervals were computed afterwards. Each
-model was trained with one seed.
+informally, and the strided model missed its ``max about 91 steps'' part with a longest stay of 148); the first diagnosis was exploratory, and the episode-level intervals were computed afterwards. Apart
+from seven replicated synthetic cells, each model was trained with one seed.
 \end{abstract}
 
 \section{Introduction}
@@ -55,8 +58,8 @@ parking (Sec.~\ref{sec:context}).
 \item \textbf{A testable rule with an ideal-observer prediction,} and a pre-registered synthetic sweep in which it
 holds partially (Sec.~\ref{sec:rule}).
 \item \textbf{A one-variable follow-up} suggesting that timing depends on where the context frames sit, not only on
-how far they reach: moving one frame by one step fixes a parked period (one training seed per cell;
-Sec.~\ref{sec:followup}).
+how far they reach: moving one frame by one step fixes a parked period, in the original run and in all four seeds of a
+pre-registered replication (Sec.~\ref{sec:followup}).
 \item \textbf{A pre-registered evaluation that reports its failures:} a second real game that fails on timing
 (Sec.~\ref{sec:realgame}), a failed prediction about DIAMOND (Sec.~\ref{sec:diamond}) and two failed latent-action
 models (Sec.~\ref{sec:lam}). CIs are bootstrapped over held-out episodes.
@@ -288,8 +291,50 @@ released, 48 needed), and its CI contains the bar.
 \item The observer predicted the ordering (79 worst), but the models park more than it does in every gap cell, by
 0.11 to 0.32.
 \item \textbf{Caveat.} In the main sweep the two short gap cells (S10 at $N{=}8$ and $N{=}24$) released in 1.00 and
-0.82 of starts and passed R2. ``Between frames parks'' therefore holds for the far frames here, not for every gap.
-This comparison across the two experiments is an observation, not a registered test.
+0.82 of starts and passed R2, so not every gap parks. The replication below qualifies this.
+\end{itemize}
+
+\paragraph{Seed replication.} Every cell so far was trained once. We pre-registered a replication that changes only
+the training seed (18 new runs; seed 0 is the original and does not count). \emph{Stage 1} repeats the headline pair
+with seeds 1--4 and replicates if S10b $N{=}80$ passes R1 and S10 $N{=}80$ parks in at least 3 of 4 seeds each.
+\emph{Stage 2} repeats five gap cells with seeds 1--2, three far from the recent frames (S10b $N{=}72, 79, 88$) and
+two near them (S10 $N{=}8, 24$), and asks whether far gaps park (at least 5 of 6 runs) while near
+gaps do not (at least 3 of 4 runs).
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{lccccc}
+\toprule
+ & seed 0 & seed 1 & seed 2 & seed 3 & seed 4 \\
+\midrule
+S10 $N{=}80$ (frame at $-81$): parked of 60 & 37 & 43 & 45 & 49 & 47 \\
+S10 $N{=}80$: release (bar 0.494) & 0.383 & 0.283 & 0.250 & 0.183 & 0.217 \\
+S10b $N{=}80$ (frame at $-80$): parked of 60 & 0 & 0 & 0 & 0 & 0 \\
+S10b $N{=}80$: on-time (bar 0.616) & 0.650 & 0.650 & 0.700 & 0.733 & 0.717 \\
+\midrule
+S10b $N{=}72$: release (bar 0.798) & 0.783 & 0.633 & 0.667 & & \\
+S10b $N{=}79$: release (bar 0.494) & 0.350 & 0.300 & 0.233 & & \\
+S10b $N{=}88$: release (bar 0.774) & 0.550 & 0.600 & 0.400 & & \\
+S10 $N{=}8$: release (bar 0.855) & 1.000 & 0.983 & 0.967 & & \\
+S10 $N{=}24$: release (bar 0.791) & 0.817 & 0.733 & 0.533 & & \\
+\bottomrule
+\end{tabular}
+\caption{Training-seed replication. Seed 0 is the original run. A gap cell parks when its release fraction is below
+its bar. Point estimates; per-run 95\% bootstrap CIs over the 20 test episodes are in \texttt{notes/handoff.md}.}
+\label{tab:seeds}
+\end{table}
+
+\begin{itemize}
+\item \textbf{Stage 1 replicates, 4 of 4 for both claims.} With the frame at $-81$ every new seed parks in 43--49 of
+60 starts (the original: 37); with it at $-80$ no seed parks in any start. The R1 pass is narrow in two of the five runs (0.650 against
+0.616); the absence of parking is not.
+\item \textbf{Stage 2 does not hold as registered.} All 6 far-gap runs park, but only 2 of 4 near-gap runs release:
+S10 $N{=}24$ parks in both new seeds, so its R2 pass in the main sweep (by two starts) does not replicate. The sweep
+verdict is unchanged, but that cell is fragile.
+\item Post hoc, not a registered test: of the six gap cells trained with several seeds (S10 $N{=}80$ and the five
+stage-2 cells), five park in most or all seeds (S10 $N{=}80$ and S10b $N{=}72, 79, 88$ in every seed; S10 $N{=}24$ in
+two of three). The exception is the nearest gap ($N{=}8$, between the frames at $-17$ and $-4$), which releases in
+all three. The seed-1 miss at $N{=}24$ is narrow (0.733 against 0.791; its CI contains the bar).
 \end{itemize}
 
 \subsection{A second real game}
@@ -382,14 +427,14 @@ exists for either version, and we have closed this line of work.
 \begin{itemize}
 \item One game for the main study, 64px frames, one seed per training configuration, and 10 evaluation episodes,
 hence the wide CIs.
-\item The synthetic tests isolate timing but have no action conditioning, and use one seed per cell. Their
-out-of-reach criterion is one-sided, so parking passes it.
+\item The synthetic tests isolate timing but have no action conditioning, and use one seed per cell, except the seven cells
+of the seed replication. Their out-of-reach criterion is one-sided, so parking passes it.
 \item The second real game failed its registered test, and its C10 model was never trained, so the rule has no
 confirmation on a second real game. The strided run there was resumed once from the pilot's 20k-step checkpoint: the
 learning rate (constant after warm-up), weights, EMA and optimizer state match an uninterrupted run, but the batch and
 noise stream was re-seeded, so it is not bit-identical to one.
-\item The follow-up is one layout, one seed per cell and 60 starts per cell; one of its three off-frame cells is
-marginal.
+\item The follow-up is one layout and 60 starts per cell; seven synthetic cells (the four follow-up cells and S10
+$N{=}8, 24, 80$ of the sweep) were replicated with 2--4 further training seeds; the other 20 were not.
 \item Many paired comparisons are reported without multiple-comparison correction.
 \item Pre-registration here has limits: the first diagnosis of the parking was exploratory, the context ablation had
 only an informal criterion, the follow-up prediction was suggested by the sweep and registered before the follow-up's own runs, and the

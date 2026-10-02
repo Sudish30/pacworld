@@ -123,6 +123,65 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## SEED REPLICATION VERDICT (2026-10-02): stage 1 REPLICATES; stage 2 PATTERN DOES NOT HOLD
+Scored by `tools/timer_seeds_verdict.py` against section 12 of `notes/timer_rule_design.md` (commit 465e277). 18 new
+runs, only the training seed changed; D0 passes in all. `seeds_verdict.json` sha256 `aa0dac629e6e8f2f`. Seed 0 is the
+original run and does not count. [ ] = bootstrap 95% CI over the 20 test episodes.
+
+**Stage 1 (the headline pair): REPLICATES, 4 of 4 for both claims.**
+
+| cell | seed | parked | release (bar 0.494 for S10) | on-time tol 2 (R1 bar 0.616 for S10b) |
+|---|---|---|---|---|
+| S10 N=80 (frame at −81) | 0 (original) | 37 / 60 | 0.383 [0.27, 0.50] | 0.117 |
+| | 1 | 43 / 60 | 0.283 [0.18, 0.38] | 0.083 |
+| | 2 | 45 / 60 | 0.250 [0.13, 0.37] | 0.050 |
+| | 3 | 49 / 60 | 0.183 [0.12, 0.25] | 0.083 |
+| | 4 | 47 / 60 | 0.217 [0.13, 0.30] | 0.083 |
+| S10b N=80 (frame at −80) | 0 (original) | 0 / 60 | 1.000 | 0.650 [0.53, 0.77] |
+| | 1 | 0 / 60 | 1.000 | 0.650 [0.55, 0.75] |
+| | 2 | 0 / 60 | 1.000 | 0.700 [0.58, 0.82] |
+| | 3 | 0 / 60 | 1.000 | 0.733 [0.62, 0.83] |
+| | 4 | 0 / 60 | 1.000 | 0.717 [0.60, 0.83] |
+
+- With the frame at −81 every new seed parks in 43-49 of 60 starts (the original: 37); with it at −80 no seed parks
+  in any start.
+- Claim A (S10b N=80 passes R1) held in all four, but seed 1 passed by the same two starts as seed 0 (0.650 vs
+  0.616). The R1 pass is narrow; the absence of parking is not.
+
+**Stage 2 (far gaps park, near gaps do not): PATTERN DOES NOT HOLD.** Far gaps: 6 of 6 runs park (needed ≥ 5). Near
+gaps: only 2 of 4 runs do not park (needed ≥ 3).
+
+Each entry: release fraction [95% CI], on-time fraction (tol 2), parked starts of 60.
+
+| cell | seed 0 (original) | seed 1 | seed 2 | release bar |
+|---|---|---|---|---|
+| S10b N=72 (far, mid-gap) | 0.783 [0.70, 0.87], 0.233, 13 | 0.633 [0.52, 0.75], 0.150, 22 | 0.667 [0.55, 0.77], 0.167, 20 | 0.798 |
+| S10b N=79 (far, end of gap) | 0.350 [0.25, 0.45], 0.117, 39 | 0.300 [0.20, 0.40], 0.083, 42 | 0.233 [0.13, 0.35], 0.067, 46 | 0.494 |
+| S10b N=88 (far, mid-gap) | 0.550 [0.42, 0.67], 0.183, 27 | 0.600 [0.48, 0.70], 0.200, 24 | 0.400 [0.28, 0.50], 0.133, 36 | 0.774 |
+| S10 N=8 (near) | 1.000 [1.00, 1.00], 0.383, 0 | 0.983 [0.95, 1.00], 0.367, 1 | 0.967 [0.92, 1.00], 0.350, 2 | 0.855 |
+| S10 N=24 (near) | 0.817 [0.72, 0.90], 0.317, 11 | **0.733 [0.65, 0.82], 0.267, 16** | **0.533 [0.43, 0.65], 0.150, 28** | 0.791 |
+
+- **The far gaps park in every seed.** S10b N=72, which missed its bar by one start at seed 0, misses it clearly in
+  both new seeds.
+- **The near-gap half of the pattern fails because of N=24.** It parks in both new seeds; its seed-0 pass (by two
+  starts) was not robust. Only the nearest gap, N=8 (between −17 and −4), releases in every seed.
+- **What this changes.** The caveat written after the follow-up ("short gaps did not park") was too generous to
+  short gaps: across seeds, a gap at N=24 parks too. Post hoc: 5 of the 6 gap cells with more than one seed
+  (S10 N=80 plus the five stage-2 cells) park in most or all seeds; the exception is the nearest gap. This is closer
+  to the owner's original prediction than to the ideal observer, which expects about 0.9 release mid-gap (post-hoc
+  observation).
+- **What it does not change.** The sweep verdict (PARTIAL) and the follow-up verdict (SUPPORTED) stay as registered.
+  S10 N=24 remains a registered R2 pass in the sweep; the README and paper now note that it does not replicate.
+- **Cost.** Pod `fw39kyaqi4rh9j` ran about 7 h on the RTX 2000 Ada and is deleted. Balance **$18.99** (was $20.96;
+  about $1.97 including the duplicate-pod minutes and volume storage). No pod exists.
+- wandb: the 18 runs were uploaded from the Mac (`timer-<layout>-N<N>-s<seed>`).
+- **Review 4 (result review): APPROVE WITH CHANGES, all 16 applied.** Every number matched the result files. The
+  edits removed overclaims ("five of five seeds" counted the original run; "4 of 5 gap cells" left out S10 N=80 and
+  was not marked post-hoc), named the stage 2 failure in the abstract and in the README's "What failed", and added
+  the per-run CIs above.
+- **Reviewer's next step:** one new training seed of the Ms. Pac-Man strided model (ctx6s16), because the main
+  real-game claim rests on a single training run. About $4-5. Then stop and tell the owner the arXiv files are ready.
+
 ## Related work written; arXiv bundle script; seed replication launched (2026-10-01)
 - **Related work** (`paper/main.tex`, 21 new references in `refs.bib`). A literature agent verified each paper on
   arXiv; review 3 (APPROVE WITH CHANGES, applied) re-checked 10 of them, corrected four descriptions and added three

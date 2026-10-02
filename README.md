@@ -13,13 +13,15 @@ browser at 15 fps. There is no public live demo; the code to serve it yourself i
   their pen for a fixed time with no countdown on screen. A network that sees only the last 4 frames cannot tell
   how long a ghost has waited, and leaves it parked there. Showing it a few older frames as well removes the parking.
 - **The follow-up.** In a small test game, a network timed a hidden 80-step wait correctly when one of its past
-  frames sat exactly 80 steps back; with that frame 81 steps back instead, it parked in 37 of 60 tries. One training
-  run per setting.
+  frames sat exactly 80 steps back; with that frame 81 steps back instead, it parked in 37 of 60 tries. Repeating
+  both with four fresh training runs each gave the same picture every time.
 - **What failed.** The same idea on a second real game gave a model that releases the ghost but at the wrong time.
   Two attempts to learn the controls from video alone, without key-press labels, failed. A prediction about another
-  team's model (DIAMOND) was wrong. A second hidden timer in Ms. Pac-Man is still unsolved.
+  team's model (DIAMOND) was wrong. A second hidden timer in Ms. Pac-Man is still unsolved. A pre-registered check
+  that short gaps between the model's past frames are harmless failed when repeated with new training runs.
 - **How to read the numbers.** From the context comparison on, each test's pass/fail rule was written down before
-  its result existed, and failed tests are reported as failures. Each model was trained once (one random seed).
+  its result existed, and failed tests are reported as failures. Most models were trained once (one random seed);
+  only seven settings of the small test game were repeated with new seeds.
 
 ![the real game beside a 4-frame model and the strided-context model, same start and actions](docs/demo.gif)
 
@@ -198,10 +200,44 @@ suggested by the sweep, not a prediction made before any data.
   middle half of its releases land at 80-81 steps.
 - **N = 72 is marginal.** It missed its bar by one start (47 of 60 released; 48 were needed), and its interval
   contains the bar. N = 79 and N = 88 fail clearly.
-- **Caveat: short gaps did not park.** In the main sweep, the two short between-frames periods (N = 8 and N = 24)
-  released in 1.00 and 0.82 of starts and passed. So "between frames parks" holds for the far frames here, not for
-  every gap. That comparison across the two experiments is an observation, not a registered test.
+- **Caveat: not every gap parks.** In the main sweep, the two short between-frames periods (N = 8 and N = 24)
+  released in 1.00 and 0.82 of starts and passed. The seed replication below shows that the N = 24 pass did not hold up
+  under new seeds; only the nearest gap (N = 8) released in every seed.
 - The ideal observer predicted the ordering (79 worst), but the models park more than it does in every gap cell.
+
+### Seed replication: the headline holds; "short gaps are fine" does not
+
+Each cell above was trained once. A pre-registered replication repeated the key cells with new training seeds and
+nothing else changed (18 runs; seed 0 is the original run and does not count toward the verdicts).
+
+**Stage 1, the headline pair: replicates in 4 of 4 new seeds for both claims** (needed: 3 of 4).
+
+| N = 80 with the frame at | seed 0 | seed 1 | seed 2 | seed 3 | seed 4 |
+|---|---|---|---|---|---|
+| −81: parked starts (of 60) | 37 | 43 | 45 | 49 | 47 |
+| −80: parked starts (of 60) | 0 | 0 | 0 | 0 | 0 |
+| −80: on time (bar 0.616) | 0.650 | 0.650 | 0.700 | 0.733 | 0.717 |
+
+The on-time pass is narrow in two of the five runs (0.650 against 0.616, two starts); the absence of parking is not.
+
+**Stage 2, "far gaps park, near gaps do not": does not hold** (needed: 5 of 6 far-gap runs parking and 3 of 4
+near-gap runs not parking; got 6 of 6 and 2 of 4).
+
+| cell (released fraction; bar) | seed 0 | seed 1 | seed 2 |
+|---|---|---|---|
+| far gap, N = 72 (bar 0.80) | 0.78 parks | 0.63 parks | 0.67 parks |
+| far gap, N = 79 (bar 0.49) | 0.35 parks | 0.30 parks | 0.23 parks |
+| far gap, N = 88 (bar 0.77) | 0.55 parks | 0.60 parks | 0.40 parks |
+| near gap, N = 8 (bar 0.86) | 1.00 | 0.98 | 0.97 |
+| near gap, N = 24 (bar 0.79) | 0.82 | **0.73 parks** | **0.53 parks** |
+
+- **The far gaps park in every seed**, including N = 72, which was marginal at seed 0.
+- **The near gap at N = 24 parks in both new seeds.** Its pass in the main sweep (by two starts) does not replicate.
+  (Seed 1 misses by about 3 starts and its interval contains the bar; seed 2 misses clearly.)
+  The sweep's registered verdict is unchanged, but that cell should be read as fragile.
+- **Net (a summary made after the fact, not a registered test):** of the six between-frames cells trained with
+  several seeds (N = 80 with the frame at −81, and the five above), five park in most or all seeds. The exception is
+  the nearest gap (N = 8, between the frames at −17 and −4).
 
 ## A second real game: the test failed on timing
 
