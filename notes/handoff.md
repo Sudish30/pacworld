@@ -274,6 +274,15 @@ before any browser measurement of the final graph).
 - `web/model_debug.onnx` (for `debug.html`) was made by an ad-hoc snippet that adds intermediate tensors of the first
   Euler step as graph outputs; it is not committed.
 
+### LIVE (2026-10-02): https://sudish30.github.io/pacworld/
+- Release `web-demo-v1` holds the three assets; Pages is enabled with source "GitHub Actions"; workflow run
+  36989428750 deployed it. Checked after deploying: every file returns 200, the served model's sha256 matches, the
+  page plays in Chrome, and the only host contacted is `sudish30.github.io`.
+- To redeploy after changing the page: push, then `gh workflow run pages.yml --repo Sudish30/pacworld`. After a new
+  export: update `configs/web_demo_assets.sha256` and upload the files to a new release tag, passed as the `release`
+  input.
+- The README links the demo at the top.
+
 ### Review 7 (pilot result, page text, deployment): APPROVE WITH CHANGES, applied
 - The pass is legitimate: the reviewer re-derived the byte layouts, the padding and the sampler algebra and found no
   measurement bug.

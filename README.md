@@ -1,9 +1,14 @@
 # pacworld
 
+**[Play it in your browser](https://sudish30.github.io/pacworld/)**: the model runs on your own GPU through WebGPU
+(desktop Chrome or Edge with a keyboard, 39 MB download, about 14 fps on an M3 Pro MacBook Pro against the game's 15).
+Every frame after the first is drawn by the network, and the world drifts the longer you play.
+
 A playable neural world model of Ms. Pac-Man: an action-conditioned diffusion model in the style of
 [DIAMOND](https://arxiv.org/abs/2405.12399) that predicts the next frame from the last few frames and the
 player's action. There is no game engine underneath: when the model is served on a GPU, you play inside it in the
-browser at 15 fps. There is no public live demo; the code to serve it yourself is below.
+browser at 15 fps. The browser version above has no automatic reset when the model loses Pac-Man; the GPU
+server below has one, and the code to run it yourself is there too.
 
 ## In short
 
@@ -350,6 +355,8 @@ train_model1.py      training loop: EMA, context-noise augmentation, periodic va
                      rollout GIF, checkpoints, wandb
 serve/               the playable demo: FastAPI + WebSocket server, browser canvas, a watchdog that starts a
                      fresh board when the model loses Pac-Man
+web/                 the browser demo: the page, its JavaScript context buffer, and the test pages that check
+                     it against PyTorch; tools/export_onnx.py exports the model, tools/build_site.sh builds the site
 timer_game.py        the synthetic hidden-timer game; train_timer.py and eval/timer_eval.py train and score it
 eval/pacman_house.py the second real game (2600 Pac-Man ghost house)
 lam.py, train_lam.py the latent action model (negative results, see above)

@@ -3,6 +3,49 @@
 Short plain-language notes at each milestone: what happened, why, what it means, what's next. Newest first.
 Anything that would need one of the hard limits (see the Workflow note in `notes/handoff.md`) is also written here.
 
+## 2026-10-02 — The demo is live: https://sudish30.github.io/pacworld/
+
+**What happened.** The served model now runs in a visitor's browser, with no server and no cost. It is linked at the
+top of the README.
+
+**The pilot (the cheap test first).** The bar was written down before measuring: at least 10 frames per second in
+Chrome on your Mac, and frames that match the PyTorch model closely.
+- **Speed: 13.8 frames per second** (the game's own rate is 15, so it plays at about 92% speed).
+- **Accuracy: the browser's frames differ from PyTorch's by 0.10 on the 0-255 colour scale on average**, at most 2,
+  on all 16 test cases. The bar was 1.0.
+- Both passed, so I built the page.
+
+**Three things had to be solved.**
+1. **Half-size numbers.** To halve the download (39 MB instead of 76), the weights are stored as 16-bit numbers
+   ("half precision") instead of 32-bit. The reviewer spotted that one part of the model, the part that tells the
+   network how noisy its input is, needs more precision than 16 bits give. I compute that part once, in full
+   precision, and store the result inside the model file.
+2. **A bug in the browser's GPU library.** The first run was fast but drew wrong frames. The same model was exact on
+   the browser's CPU path, so I compared the two paths layer by layer. The very first layer was wrong on the GPU: it
+   mishandles an input with 33 channels. Padding the input to 36 channels with zeros fixes it and changes nothing
+   mathematically.
+3. **Where to put a 39 MB file.** It is attached to a GitHub "release" instead of being committed, so the repo's
+   history stays small. A small script on GitHub builds the site from the repo plus that file.
+
+**What the page says.** Plain English: what you are looking at, what to watch for (the ghost pen), the finding, and
+an honest-limits list (it drifts, ghosts fade, it was trained once, 64x64, not affiliated with the game's owners).
+The reviewer rewrote 12 sentences to remove overclaims.
+
+**Two things for you to know.**
+- **Intellectual property.** The page shows frames of, and a model trained on, Ms. Pac-Man, which belongs to Bandai
+  Namco. For a small non-commercial research demo the risk is low and similar demos exist, but a takedown request is
+  possible. To take the demo down yourself: repo Settings -> Pages -> disable, and delete the release `web-demo-v1`.
+- **Phones do not work.** It needs a keyboard and WebGPU (desktop Chrome or Edge). Other visitors see a recording.
+
+**Explain it back.** *Why can the model run in a browser at all, and why did we store the weights as 16-bit numbers?*
+<details><summary>Answer</summary>
+The model is small (18.8 million numbers) and each frame needs only three passes through it, so a laptop's graphics
+chip can do it about 14 times a second. Browsers can now use the graphics chip through a feature called WebGPU.
+Storing each weight in 16 bits instead of 32 halves the download and barely changes the output (0.10 out of 255),
+because the network's arithmetic does not need more precision than that, except for one small part, which we
+computed ahead of time in full precision.
+</details>
+
 ## 2026-10-02 — The robustness check: the headline result holds up; one side claim does not
 
 **What happened.** The 18 extra training runs finished (about $2). Each repeats an earlier experiment with a
