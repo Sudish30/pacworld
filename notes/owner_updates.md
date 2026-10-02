@@ -3,6 +3,38 @@
 Short plain-language notes at each milestone: what happened, why, what it means, what's next. Newest first.
 Anything that would need one of the hard limits (see the Workflow note in `notes/handoff.md`) is also written here.
 
+## 2026-10-02 — The main Ms. Pac-Man result held up in a second training run; one smaller claim did not
+
+**What happened.** The main result (older frames in the model's view stop it from parking ghosts) came from a single
+training run of that model. I trained it again from a different random starting point (a new "seed"), with the
+pass/fail rule fixed in advance. Cost: about $2.80.
+
+**Result: it replicates.** The new run also parked ghosts in 0 of 30 test rollouts, against 17 of 30 for the model
+that sees only its last 4 frames. The registered rule needed the difference to be clearly below zero and at most 3
+parked rollouts; it got −0.57 [−0.77, −0.37] and 0.
+
+**Two honest caveats.**
+- **The timing is not exact.** The new run holds ghosts for a typical 104 steps and at most 138; the real game holds
+  them 78 and at most 91. Parking is gone, precise timing is not.
+- **One smaller claim is withdrawn.** I had reported that the same change also made Pac-Man's position more accurate
+  (by about 5 pixels). In the new run it did not (1 pixel, well within the noise). That earlier number was one run's
+  luck, so the README and paper now say there is no reliable evidence for it. This is exactly what a second seed is
+  for.
+
+**What it means.** The headline is on firmer ground: the parking fix has now been seen in two independent training
+runs on the real game and in five on the small test game. GPU experiments stop here on the reviewer's decision.
+About $13 of usable balance stays in reserve.
+
+**What's next.** Rebuild the arXiv files and tell you they are ready, then the 60-second video.
+
+**Explain it back.** *Why did we train the same model twice, and what did the second run change?*
+<details><summary>Answer</summary>
+Training starts from random numbers and feeds the data in a random order, so two runs of the same recipe give
+slightly different models. If a result only appears in one run, it may be luck. The second run kept the important
+result (no parked ghosts) and removed an unimportant one (better Pac-Man position), which turned out to be luck. A
+result seen in two runs is much more believable than one seen in one.
+</details>
+
 ## 2026-10-02 — The demo is live: https://sudish30.github.io/pacworld/
 
 **What happened.** The served model now runs in a visitor's browser, with no server and no cost. It is linked at the

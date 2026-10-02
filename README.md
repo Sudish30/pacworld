@@ -26,7 +26,7 @@ server below has one, and the code to run it yourself is there too.
   that short gaps between the model's past frames are harmless failed when repeated with new training runs.
 - **How to read the numbers.** From the context comparison on, each test's pass/fail rule was written down before
   its result existed, and failed tests are reported as failures. Most models were trained once (one random seed);
-  only seven settings of the small test game were repeated with new seeds.
+  only the strided Ms. Pac-Man model and seven settings of the small test game were repeated with new seeds.
 
 ![the real game beside a 4-frame model and the strided-context model, same start and actions](docs/demo.gif)
 
@@ -80,12 +80,17 @@ How long the ghost pen stays occupied in a 450-step rollout:
 | ctx8 | 8 consecutive | 23 / 30 [0.63, 0.90] | 324 [282, 349] |
 | **ctx6s16** | **4 + 6 @ stride 16 (reach 97)** | **0 / 30**\* | **82** [73, 93] |
 | ctx6s16 + LR anneal (served) | 4 + 6 @ stride 16 | 0 / 30\* | 70 [65, 75] |
+| ctx6s16, second training seed | 4 + 6 @ stride 16 | 0 / 30\* | 104 [93, 107] |
 
 \* No rollout parked in any of the 10 episodes, so the bootstrap interval is degenerate. The exact one-sided 95%
 upper bound on the per-episode parking rate is 0.26.
 
 - **The strided context removes the parking.** Parked fraction, ctx6s16 minus ctx4 on the same episodes: **−0.57
   [−0.77, −0.37]**. In 900-step rollouts: −0.83 [−0.93, −0.73].
+- **It does so again with a second training seed.** A pre-registered repeat of the strided model from a new random
+  seed gave 0 / 30 parked and the same paired difference, −0.57 [−0.77, −0.37] (rule: the interval's upper end below
+  0 and at most 3 of 30 parked). The parking is gone in both seeds, but the timing is not exact: the new seed holds
+  ghosts for a median of 104 steps and up to 138, against 78 and 91 in the real game.
 - **No clear evidence that 8 consecutive frames park more than 4**: +0.20 [−0.10, +0.47].
 - **No clear evidence that 10x more data changes parking**: +0.03 [−0.20, +0.27].
 
@@ -97,18 +102,23 @@ upper bound on the per-episode parking rate is 0.26.
 | ctx4 (2.2M frames) | 4 consecutive | 0.959 [0.955, 0.962] | 0.848 [0.828, 0.872] | 19.0 [13.2, 24.8] | 0.37 [0.28, 0.47] | 0.50 [0.31, 0.69] |
 | ctx8 | 8 consecutive | 0.960 [0.958, 0.962] | 0.829 [0.808, 0.852] | 19.1 [12.6, 25.2] | 0.38 [0.26, 0.51] | 0.37 [0.23, 0.50] |
 | **ctx6s16** | 4 + 6 @ stride 16 | 0.952 [0.949, 0.956] | 0.843 [0.816, 0.869] | 13.7 [9.1, 18.6] | 0.39 [0.36, 0.41] | 0.51 [0.25, 0.71] |
+| ctx6s16, second training seed | 4 + 6 @ stride 16 | 0.943 [0.939, 0.948] | 0.841 [0.823, 0.862] | 17.8 [13.0, 23.1] | 0.38 [0.34, 0.42] | 0.50 [0.28, 0.67] |
 | **+ LR anneal** (served) | 4 + 6 @ stride 16 | 0.955 [0.953, 0.958] | 0.845 [0.825, 0.864] | 14.6 [10.4, 19.3] | 0.43 [0.40, 0.46] | 0.58 [0.30, 0.87] |
 | at 128x128 | 4 + 6 @ stride 16 | 0.970 [0.964, 0.976] | 0.831 [0.799, 0.865] | 22.7† [15.4, 29.8] | 0.26 [0.23, 0.29] | 0.51 [0.29, 0.73] |
 
 Paired differences on the same episodes:
 
 - **Supported:**
-  - strided context lowers Pac-Man error: −5.3 px [−11.6, −0.5] against ctx4;
   - the LR anneal improves responsiveness: +0.044 [+0.009, +0.080];
   - 10x data improves responsiveness: +0.071 [+0.014, +0.129].
 - **Supported, and unfavourable:**
-  - strided context slightly lowers wall IoU: −0.007 [−0.011, −0.002] against ctx4;
+  - strided context slightly lowers wall IoU: −0.007 [−0.011, −0.002] against ctx4 (−0.015 [−0.021, −0.009] with the
+    second seed);
   - 8 consecutive frames lower pellet IoU: −0.018 [−0.027, −0.010] against 4.
+- **Withdrawn after the second seed:** "strided context lowers Pac-Man error". The first seed showed −5.3 px
+  [−11.6, −0.5] against ctx4; the second shows −1.2 px [−6.7, +3.6], and the two seeds differ from each other by 4.1
+  px [+0.2, +8.1]. So the first seed's result does not hold up: there is no reliable evidence that the strided context changes
+  Pac-Man error.
 - **Not supported:**
   - no clear evidence that 10x data lowers Pac-Man error (−0.5 px [−2.7, +1.3]) or changes any other metric here;
   - no clear evidence of any difference in ghost count between our models.
@@ -125,7 +135,8 @@ attempts to fix it failed; the details are in the handoff.
 
 - **A longer reach alone (145 steps, 13 frames) did not fix it.** Of 15 frightened phases, 8 never ended and none
   ended in the real 124-134 range; the 7 that ended did so after 7-9 or 168-474 steps. It also weakened the pen
-  timer: median longest pen stay 110.5 [79, 136] against 82 [73, 93] for the 97-step model, and fewer ghosts released
+  timer: median longest pen stay 110.5 [79, 136] against 82 [73, 93] for the 97-step model (a second seed of the 97-step model
+  gave 104 [93, 107], so this gap may be seed variation), and fewer ghosts released
   within 150 steps (cyan 62% vs 97%, pink 55% vs 89%; no paired interval was computed).
 - **Oversampling training windows around phase ends did not fix it either.**
   - In a matched pair fine-tuned on the same enlarged data (25% of each batch within ±8 steps of a phase end), the

@@ -1,0 +1,16 @@
+# Coherence metrics of the second training seed of the strided model, beside ctx4 and the original seed
+# (eval/bootstrap_ci.py; reported, not part of the registered criterion). Settings as configs/stats.yaml.
+bootstrap: 10000
+seed: 0
+window: 8
+horizons: [15, 150, 450]
+metrics: [wall_iou, wall_iou_rel, pellet_iou, pac_err, responsiveness, ghost_count, ghost_count_rel]
+runs:
+  ctx4: eval/results/m1-2M-ctx4/model1/per_step.csv
+  ctx6s16: eval/results/m1-2M-ctx6s16/model1/per_step.csv
+  ctx6s16-s1: eval/results/m1-2M-ctx6s16-s1/model1/per_step.csv
+pairs:
+  - [ctx4, ctx6s16-s1]
+  - [ctx4, ctx6s16]
+  - [ctx6s16, ctx6s16-s1]
+out: eval/results/stats_s1

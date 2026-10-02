@@ -300,11 +300,50 @@ before any browser measurement of the final graph).
   exist, but a takedown request is possible and would be addressed to this repo.
 
 
-## RUNNING (2026-10-02): `m1-2M-ctx6s16-s1` on pod `r7bf2bbl3ff5se` (`pacworld-ctx6s16-s1`, RTX 4090, $0.74/h)
-- Review 5 (design): APPROVE WITH CHANGES, applied (criterion made unambiguous, validity condition, file gates).
-- Code checksums matched; gates passed; training started. Balance before: $18.98. `tools/ctx6s16_seed1.sh` logs to
-  `logs/ctx6s16_seed1.log` on the volume. When it prints `CTX6S16 SEED 1 FINISHED`: fetch
-  `eval/results/stats_s1/pen_bootstrap.json`, score by the registered rule, upload the wandb run, delete the pod.
+## VERDICT (2026-10-02): the second training seed of the strided Ms. Pac-Man model REPLICATES the pen result
+Scored by the rule registered in 1cd480b (section above). Run `m1-2M-ctx6s16-s1`: 100k steps in 198.5 min on an RTX
+4090, val denoise 0.0007, no NaN; wandb `p49ip8j5`; checkpoint sha256 `c03dcff0370491b0`.
+`eval/results/stats_s1/pen_bootstrap.json` sha256 `4317621ec77eebd3`.
+
+- **Validity:** 30 rollouts over 10 episodes; the recomputation printed REPRODUCED for ctx4 (17/30, 238.5) and for
+  ctx6s16 (0/30, 82).
+- **U** (upper bound of the CI of "new seed minus ctx4") = **−0.367**; **K** (parked rollouts of the new seed) = **0**.
+  U < 0 and K ≤ 3 -> **REPLICATES.**
+
+| 450-step rollouts | parked 200+ | median longest pen stay | max |
+|---|---|---|---|
+| real game | 0 / 30 | 78 | 91 |
+| ctx4 | 17 / 30 [0.37, 0.77] | 238.5 [150, 287] | 369 |
+| ctx6s16, seed 0 (original) | 0 / 30 | 82 [73, 93] | 148 |
+| **ctx6s16, seed 1 (new)** | **0 / 30** | **104 [93, 107]** | 138 |
+
+- Paired difference in parked fraction, new seed minus ctx4: **−0.567 [−0.767, −0.367]** (identical to seed 0's). At
+  900 steps (supplementary): 0/30 against ctx4's 25/30, difference −0.833 [−0.933, −0.733].
+- **The new seed holds ghosts longer than the real game.** Its median longest stay is 104 steps against the real 78
+  and seed 0's 82, and its maximum is 138 against a real maximum of 91. So neither seed meets the informal "max ~91"
+  target; the parking is gone in both, exact timing is not.
+
+**Reported, not part of the criterion: the coherence metrics at 450 steps** (`configs/stats_s1.yaml`,
+`eval/bootstrap_ci.py`; paired differences against ctx4 on the same episodes):
+
+| metric | seed 0 − ctx4 | seed 1 − ctx4 | seed 1 − seed 0 |
+|---|---|---|---|
+| Pac-Man error (px) | −5.3 [−11.6, −0.5] * | **−1.2 [−6.7, +3.6]** | +4.1 [+0.2, +8.1] * |
+| wall IoU | −0.007 [−0.011, −0.002] * | −0.015 [−0.021, −0.009] * | −0.008 [−0.012, −0.004] * |
+| responsiveness | +0.011 [−0.08, +0.10] | +0.002 [−0.09, +0.09] | −0.010 [−0.05, +0.04] |
+| pellet IoU | −0.005 [−0.03, +0.02] | −0.006 [−0.02, +0.01] | −0.001 [−0.02, +0.02] |
+| ghosts / ground truth | +0.008 [−0.10, +0.13] | −0.003 [−0.09, +0.10] | −0.010 [−0.06, +0.03] |
+
+- **The earlier claim "the strided context lowers Pac-Man error" does not replicate.** Seed 1's error is 17.8 px
+  [13.0, 23.1], against 19.0 for ctx4 and 13.7 for seed 0; the difference to ctx4 is not significant, and the two
+  seeds differ from each other by 4.1 px. That claim came from one seed and is withdrawn in the README and paper.
+- **The small wall-IoU cost of the strided context replicates** and is larger in the new seed (−0.015).
+- **Cost.** Pod `r7bf2bbl3ff5se` (RTX 4090) ran about 3.9 h and is deleted. Balance **$16.21** (was $18.98). No pod
+  exists.
+- **Review 8 (result): APPROVE WITH CHANGES, applied** (four wording edits; all numbers matched the result files).
+- **GPU experiments stop here** (reviewer's decision): no further seeds are added, per the pre-registration; about
+  $13 usable stays in reserve for fixes after the preprint. Remaining work costs nothing: arXiv bundle, the 60-second
+  video, owner update.
 
 ## SEED REPLICATION VERDICT (2026-10-02): stage 1 REPLICATES; stage 2 PATTERN DOES NOT HOLD
 Scored by `tools/timer_seeds_verdict.py` against section 12 of `notes/timer_rule_design.md` (commit 465e277). 18 new

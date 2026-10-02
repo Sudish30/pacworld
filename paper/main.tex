@@ -21,7 +21,8 @@ Ms.~Pac-Man in the style of DIAMOND~\cite{alonso2024diamond}. The game holds gho
 no on-screen countdown. Models that see only the last 4 or 8 frames park the ghosts: in 450-step rollouts on held-out
 episodes, 16--23 of 30 rollouts keep the pen occupied for 200+ steps, against none in the real game. A context of 10
 frames with a 97-step \emph{reach} (4 recent frames plus 6 frames 16 steps apart) removes the parking (0/30; paired
-difference to 4 frames $-0.57$, 95\% CI $[-0.77,-0.37]$ over episodes).
+difference to 4 frames $-0.57$, 95\% CI $[-0.77,-0.37]$ over episodes), and does so again in a pre-registered second
+training seed.
 We state a rule: a model can time a hidden event of period $N$ only as precisely as its context offsets resolve $-N$.
 In a pre-registered sweep of 23 small models on a synthetic game, scored against an ideal observer limited to the same
 offsets, the rule holds \emph{partially}: no model times a period beyond its reach, and models with a frame exactly
@@ -40,7 +41,7 @@ parking them; two latent-action models trained without labels fail, the first by
 spending them on ghosts; and several earlier claims do not survive episode-level confidence intervals.
 From the context ablation on, every experiment's criterion was written before its result (the ablation's
 informally, and the strided model missed its ``max about 91 steps'' part with a longest stay of 148); the first diagnosis was exploratory, and the episode-level intervals were computed afterwards. Apart
-from seven replicated synthetic cells, each model was trained with one seed.
+from the strided model and seven synthetic cells, each model was trained with one seed.
 \end{abstract}
 
 \section{Introduction}
@@ -110,6 +111,7 @@ ctx4 (2.2M data) & 17/30 [0.37, 0.77] & 238.5 [150, 287] & 19.0 [13.2, 24.8] & 0
 ctx8 & 23/30 [0.63, 0.90] & 324 [282, 349] & 19.1 [12.6, 25.2] & 0.38 [0.26, 0.51] \\
 \textbf{ctx6s16} & \textbf{0/30} [0, 0]$^*$ & \textbf{82} [73, 93] & 13.7 [9.1, 18.6] & 0.39 [0.36, 0.41] \\
 ctx6s16 + LR anneal & 0/30$^*$ & 70 [65, 75] & 14.6 [10.4, 19.3] & 0.43 [0.40, 0.46] \\
+ctx6s16, second seed & 0/30$^*$ & 104 [93, 107] & 17.8 [13.0, 23.1] & 0.38 [0.34, 0.42] \\
 \bottomrule
 \end{tabular}}
 \caption{Pen-timer and coherence metrics at the 450-step horizon. Brackets: 95\% bootstrap CIs over episodes; for
@@ -123,14 +125,20 @@ on the per-episode parking rate is 0.26.}
 \begin{itemize}
 \item Strided context removes the parking: the parked fraction falls by $-0.567$ $[-0.767,-0.367]$ against ctx4, and
 by $-0.833$ $[-0.933,-0.733]$ in 900-step rollouts.
-\item It also lowers Pac-Man error at 450 steps: $-5.3$ px $[-11.6,-0.5]$.
+\item It does so again in a second training seed. We pre-registered one repeat of ctx6s16 from a new seed, to count
+as a replication if the CI of its paired difference to ctx4 lies below 0 and at most 3 of 30 rollouts park. It gave
+0/30 parked and the same difference, $-0.567$ $[-0.767,-0.367]$. Timing is not exact in either seed: the new seed's
+longest pen stay has median 104 and maximum 138 steps, against 78 and 91 in the real game.
 \item The LR anneal improves responsiveness: $+0.044$ $[+0.009,+0.080]$.
 \item Among the 64px models, two significant differences at 450 steps are unfavourable: strided context slightly lowers wall IoU ($-0.007$
-$[-0.011,-0.002]$ against ctx4), and 8 consecutive frames lower pellet IoU ($-0.018$ $[-0.027,-0.010]$ against 4).
+$[-0.011,-0.002]$ against ctx4; $-0.015$ $[-0.021,-0.009]$ in the second seed), and 8 consecutive frames lower pellet IoU ($-0.018$ $[-0.027,-0.010]$ against 4).
 \end{itemize}
 
 \paragraph{What does not hold.}
 \begin{itemize}
+\item ``Strided context lowers Pac-Man error'' does not survive the second seed. The first seed showed $-5.3$ px
+$[-11.6,-0.5]$ against ctx4; the second shows $-1.2$ px $[-6.7,+3.6]$, and the two seeds differ by 4.1 px
+$[+0.2,+8.1]$. We withdraw that claim.
 \item There is no clear evidence that eight frames park more than four: $+0.20$ $[-0.10,+0.47]$.
 \item There is no clear evidence that ten times more data changes parking ($+0.03$ $[-0.20,+0.27]$) or Pac-Man
 error ($-0.5$ px $[-2.7,+1.3]$); only responsiveness improves ($+0.071$ $[+0.014,+0.129]$).
@@ -144,8 +152,8 @@ error ($-0.5$ px $[-2.7,+1.3]$); only responsiveness improves ($+0.071$ $[+0.014
 \begin{itemize}
 \item No model ends frightened phases on time.
 \item A 145-step-reach model (13 frames) did not fix it: of 15 phases, 8 never ended and none ended within 124--134
-steps. It also weakened the pen timer that 10 frames had fixed: median longest stay 110.5 $[79, 136]$ against 82
-$[73, 93]$, and fewer ghosts released within 150 steps (cyan 62\% vs 97\%, pink 55\% vs 89\%; no paired CI).
+steps. It may also have weakened the pen timer that 10 frames had fixed: median longest stay 110.5 $[79, 136]$ against
+82 $[73, 93]$ (104 $[93, 107]$ in the 97-step model's second seed, so the gap is within seed variation), and fewer ghosts released within 150 steps (cyan 62\% vs 97\%, pink 55\% vs 89\%; no paired CI).
 \item Oversampling training windows around phase ends did not fix it. In a matched pair fine-tuned on the same
 enlarged data (25\% of each batch within $\pm8$ steps of a phase end), the 145-step model ended 23 of 25 phases but
 too early (2 of 19 scorable phases in range, median 84 steps), while the 97-step model let phases run on (0 of 9 in
@@ -425,7 +433,8 @@ exists for either version, and we have closed this line of work.
 \section{Limitations}
 \label{sec:limits}
 \begin{itemize}
-\item One game for the main study, 64px frames, one seed per training configuration, and 10 evaluation episodes,
+\item One game for the main study, 64px frames, one seed per training configuration (two for the strided model), and
+10 evaluation episodes,
 hence the wide CIs.
 \item The synthetic tests isolate timing but have no action conditioning, and use one seed per cell, except the seven cells
 of the seed replication. Their out-of-reach criterion is one-sided, so parking passes it.
