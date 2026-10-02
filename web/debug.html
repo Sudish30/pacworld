@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><title>pacworld: WebGPU vs CPU, node by node</title>
+<pre id="result">running…</pre>
+<script type="module">
+import { loadJSON, loadBin, ort, SIZE } from "./pacworld.js";
+const log = (o) => { document.getElementById("result").textContent = typeof o === "string" ? o : JSON.stringify(o, null, 1); };
+try {
+  const meta = await loadJSON("model_debug.json"), cj = await loadJSON("cases.json"), cb = await loadBin("cases.bin");
+  const n = cj.n, K = cj.K, PIX = 3 * SIZE * SIZE;
+  const feeds = () => ({
+    ctx: new ort.Tensor("float32", new Float32Array(cb, 0, K * PIX).slice(), [1, 3 * K, SIZE, SIZE]),
+    actions: new ort.Tensor("int64", BigInt64Array.from(Array.from(new Int32Array(cb, n * K * PIX * 4, K)), BigInt), [1, K]),
+    noise: new ort.Tensor("float32", new Float32Array(cb, n * K * PIX * 4 + n * K * 4, PIX).slice(), [1, 3, SIZE, SIZE]),
+  });
+  const buf = new Uint8Array(await loadBin("model_debug.onnx"));
+  const opt = new URLSearchParams(location.search).get("opt") || "disabled";
+  const run = async (ep) => { const s = await ort.InferenceSession.create(buf.slice(), { executionProviders: [ep], graphOptimizationLevel: opt }); const o = await s.run(feeds()); const r = {}; for (const k in o) r[k] = Float32Array.from(o[k].data); return r; };
+  log("running wasm…"); const a = await run("wasm");
+  log("running webgpu…"); const b = await run("webgpu");
+  const rows = [];
+  for (const m of meta) {
+    const x = a[m.out], y = b[m.out]; if (!x || !y) continue;
+    let d = 0, s = 0; for (let i = 0; i < x.length; i++) { d = Math.max(d, Math.abs(x[i] - y[i])); s = Math.max(s, Math.abs(x[i])); }
+    rows.push({ i: m.i, op: m.op, node: m.node, max_abs: +s.toPrecision(3), max_diff: +d.toPrecision(3), rel: +(d / (s + 1e-9)).toPrecision(2) });
+  }
+  const firstBad = rows.find(r => r.rel > 1e-2);
+  window.__result = { opt, n_outputs: rows.length, first_bad: firstBad, before: firstBad ? rows.filter(r => r.i < firstBad.i).slice(-4) : null,
+                      bad_ops: [...new Set(rows.filter(r => r.rel > 1e-2).slice(0, 40).map(r => r.op))], final: rows[rows.length - 1] };
+  log(window.__result);
+} catch (e) { window.__result = { error: String(e && e.stack || e) }; log(window.__result); }
+</script>

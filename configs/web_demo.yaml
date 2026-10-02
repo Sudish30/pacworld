@@ -1,0 +1,44 @@
+# Browser demo (tools/export_onnx.py, web/): the served model as one ONNX graph (3-step Euler sampler inside), run with
+# ONNX Runtime Web + WebGPU. Pilot plan and pass bar: notes/handoff.md, "BROWSER DEMO, FEASIBILITY PILOT".
+checkpoint: checkpoints/m1-2M-ctx6s16-ft-uniform/model1_ema.pt
+sampler_steps: 3                 # as configs/serve.yaml
+ctx_sigma: 0.01                  # context noise level at inference, as configs/serve.yaml
+opset: 17
+plain_ops: []                    # [groupnorm, upsample] exports those as basic arithmetic (tried while debugging; not needed)
+in_conv_channels: 36             # pad the first convolution from 33 to 36 input channels (WebGPU backend bug, see export_onnx.py)
+fps: 15                          # the game's rate (configs/serve.yaml); the page never runs faster than this
+ort_version: 1.30.0              # ONNX Runtime Web, pinned
+out_dir: web
+model_fp32: model_fp32.onnx
+model_fp16: model_fp16.onnx
+data:                            # held-out episodes for the test cases and the demo's starting contexts (local 200k set)
+  folder: data/agent
+  val_episodes: configs/val_episodes.json
+  size: 64
+  resample: box
+cases:                           # fixed single-frame test cases: (context, actions, noise) -> PyTorch fp32 frame
+  n: 16
+  episodes: 4                    # the N longest held-out episodes
+  first_step: 100                # targets at first_step + k * step_stride within each episode
+  step_stride: 60
+  file: cases.bin                # float32 inputs and uint8 reference frames; layout in cases.json
+fidelity:                        # pass bar (0-255 scale)
+  max_mean_abs_diff: 1.0
+  big_diff: 8
+  max_big_diff_frac: 0.01
+starts:                          # real histories the demo starts from: frames [start - 97, start) and their actions
+  episodes: 4
+  start_step: 100
+  file: starts.bin
+  history_check_steps: 160       # steps of the dataset.History trace the page replays to check its own context buffer
+rollout_check:                   # diagnostic: a rollout with noise from a PRNG the page reproduces, PyTorch fp32 frames saved
+  steps: 50
+  seed: 7
+  actions: [2, 4, 3, 1]          # RIGHT, DOWN, LEFT, UP, each held for `hold` steps
+  hold: 8
+  file: rollout.bin              # uint8 (steps, 3, S, S)
+presence_check:                  # reported diagnostic (tools/web_rollout_check.py): Pac-Man found by the pixel detector
+  steps: 300
+  actions: [2, 4, 3, 1]
+  hold: 8
+  detector_config: configs/eval.yaml

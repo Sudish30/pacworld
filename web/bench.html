@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>pacworld browser pilot: fidelity and speed</title>
+<body style="font-family: system-ui; max-width: 760px; margin: 24px auto">
+<h3>pacworld browser pilot</h3>
+<p>Runs the fixed test cases against PyTorch's saved outputs, checks the context buffer, then times 200 frames.</p>
+<canvas id="c" width="64" height="64" style="width:256px;height:256px;image-rendering:pixelated;border:1px solid #888"></canvas>
+<pre id="result">loading…</pre>
+<script type="module">
+import { createSession, loadJSON, loadBin, World, History, draw, toU8, ort, SIZE } from "./pacworld.js";
+const log = (o) => { document.getElementById("result").textContent = typeof o === "string" ? o : JSON.stringify(o, null, 1); };
+const params = new URLSearchParams(location.search);
+const modelUrl = params.get("model") || "model_fp16.onnx";
+const WARM = +(params.get("warm") || 20), N = +(params.get("frames") || 200);
+try {
+  const res = { model: modelUrl, userAgent: navigator.userAgent };
+  const t0 = performance.now();
+  const { session, backend } = await createSession(modelUrl, (g, t) => log(`downloading model ${(g / 1e6).toFixed(1)} / ${(t / 1e6).toFixed(1)} MB`));
+  res.backend = backend;
+  res.load_s = +((performance.now() - t0) / 1000).toFixed(1);
+  if (navigator.gpu) { const a = await navigator.gpu.requestAdapter(); res.gpu = a && a.info ? `${a.info.vendor} ${a.info.architecture} ${a.info.description || ""}`.trim() : "unknown"; res.shader_f16 = a ? a.features.has("shader-f16") : false; }
+
+  // 1. fidelity on the fixed cases
+  const cj = await loadJSON("cases.json"), cb = await loadBin("cases.bin");
+  const n = cj.n, PIX = 3 * SIZE * SIZE; { var Kc = cj.K; }
+  const ctxs = new Float32Array(cb, 0, n * Kc * PIX);
+  const acts = new Int32Array(cb, n * Kc * PIX * 4, n * Kc);
+  const noises = new Float32Array(cb, n * Kc * PIX * 4 + n * Kc * 4, n * PIX);
+  const refs = new Uint8Array(cb, n * Kc * PIX * 4 + n * Kc * 4 + n * PIX * 4, n * PIX);
+  let sum = 0, big = 0, mx = 0, worstMean = 0, worstBig = 0, over = 0, failed = 0;
+  for (let i = 0; i < n; i++) {
+    const out = await session.run({
+      ctx: new ort.Tensor("float32", ctxs.slice(i * Kc * PIX, (i + 1) * Kc * PIX), [1, 3 * Kc, SIZE, SIZE]),
+      actions: new ort.Tensor("int64", BigInt64Array.from(Array.from(acts.slice(i * Kc, (i + 1) * Kc)), BigInt), [1, Kc]),
+      noise: new ort.Tensor("float32", noises.slice(i * PIX, (i + 1) * PIX), [1, 3, SIZE, SIZE]),
+    });
+    const f = out.frame.data;
+    let cs = 0, cb2 = 0;
+    for (let p = 0; p < PIX; p++) { const d = Math.abs(toU8(f[p]) - refs[i * PIX + p]); cs += d; if (d > cj.fidelity_bar.big_diff) cb2++; if (d > mx) mx = d; }
+    sum += cs; big += cb2;
+    const cm = cs / PIX, cbf = cb2 / PIX, base = cj.python_check.pytorch_bf16;
+    const ok = cm <= cj.fidelity_bar.max_mean_abs_diff && cbf <= cj.fidelity_bar.max_big_diff_frac;
+    const excused = !ok && base.per_case_mean[i] >= cm && base.per_case_big[i] >= cbf;      // bf16 misses it at least as much
+    worstMean = Math.max(worstMean, cm); worstBig = Math.max(worstBig, cbf);
+    if (!ok) over++; if (!ok && !excused) failed++;
+  }
+  res.fidelity = { cases: n, mean_abs_diff: +(sum / (n * PIX)).toFixed(4), max_abs_diff: mx, worst_case_mean: +worstMean.toFixed(4),
+                   worst_case_big_diff_frac: +worstBig.toFixed(5), cases_over_bar: over, cases_failed: failed, pass: failed === 0 };
+
+  // 2. the context buffer against the dataset.History trace
+  const sj = await loadJSON("starts.json"), sb = await loadBin("starts.bin");
+  const ids = Array.from({ length: sj.reach }, (_, j) => j), a0 = Array.from({ length: sj.reach - 1 }, (_, j) => j % 9);
+  const h = new History(ids.slice(), a0, sj.offsets);
+  let ok = true;
+  sj.history_check.forEach((tr, j) => {
+    h.actions[h.actions.length - 1] = (7 * j + 3) % 9;
+    const idx = h.indices();
+    if (JSON.stringify(idx.map(i => h.frames[i])) !== JSON.stringify(tr.frames) || JSON.stringify(idx.map(i => h.actions[i])) !== JSON.stringify(tr.actions)) ok = false;
+    h.push(sj.reach + j);
+  });
+  const K = sj.offsets.length;
+  const hs = new History(Array.from({ length: K }, (_, j) => j), Array.from({ length: K - 1 }, (_, j) => j % 9), sj.offsets);
+  sj.history_check_short.forEach((tr, j) => {              // from a short history: the clamp at an episode start
+    hs.actions[hs.actions.length - 1] = (5 * j + 1) % 9;
+    const idx = hs.indices();
+    if (JSON.stringify(idx.map(i => hs.frames[i])) !== JSON.stringify(tr.frames) || JSON.stringify(idx.map(i => hs.actions[i])) !== JSON.stringify(tr.actions)) ok = false;
+    hs.push(K + j);
+  });
+  res.history_matches_python = ok;
+  res.history_steps_checked = sj.history_check.length + sj.history_check_short.length;
+
+  // 2b. diagnostic: a rollout with the same seeded noise as PyTorch's saved frames
+  const ro = cj.rollout, rb = new Uint8Array(await loadBin(ro.file));
+  const w0 = new World(session, sj, sb);
+  let firstBad = null; const roMeans = [];
+  for (let j = 0; j < ro.steps; j++) {
+    const f = await w0.step(ro.actions[Math.floor(j / ro.hold) % ro.actions.length], [ro.seed * 100003 + 2 * j, ro.seed * 100003 + 2 * j + 1]);
+    let cs = 0, cb2 = 0;
+    for (let p = 0; p < PIX; p++) { const d = Math.abs(toU8(f[p]) - rb[j * PIX + p]); cs += d; if (d > cj.fidelity_bar.big_diff) cb2++; }
+    roMeans.push(+(cs / PIX).toFixed(3));
+    if (firstBad === null && (cs / PIX > cj.fidelity_bar.max_mean_abs_diff || cb2 / PIX > cj.fidelity_bar.max_big_diff_frac)) firstBad = j + 1;
+  }
+  res.rollout_same_noise = { steps: ro.steps, first_step_over_bar: firstBad, mean_abs_diff_step1: roMeans[0], mean_abs_diff_last: roMeans[roMeans.length - 1] };
+
+  // 3. speed: the whole loop, as the game would run it
+  const world = new World(session, sj, sb);
+  const g = document.getElementById("c").getContext("2d"), img = g.createImageData(SIZE, SIZE);
+  const times = [];
+  for (let i = 0; i < WARM + N; i++) {
+    const t = performance.now();
+    const f = await world.step([2, 2, 2, 4, 4, 3, 3, 1][(i >> 4) % 8]);      // hold each direction for 16 frames
+    draw(g, f, img);
+    if (i >= WARM) times.push(performance.now() - t);
+    if (i % 20 === 0) log(`timing frame ${i} / ${WARM + N}`);
+  }
+  times.sort((a, b) => a - b);
+  const med = times[times.length >> 1];
+  res.speed = { frames: N, warmup: WARM, median_ms: +med.toFixed(1), p90_ms: +times[Math.floor(times.length * 0.9)].toFixed(1), fps_median: +(1000 / med).toFixed(1), pass: 1000 / med >= 10 };
+  res.pilot_pass = res.fidelity.pass && res.speed.pass && ok;
+  window.__result = res;
+  log(res);
+} catch (e) { window.__result = { error: String(e && e.stack || e) }; log(window.__result); }
+</script>
+</body>
