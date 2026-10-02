@@ -123,6 +123,49 @@ Inference-free, from the saved eval frames; both worlds measured with one pixel 
 - **Never-penned ghosts (81% vs Model 1's 90%)**: red 85% detected, 95% of its missing steps are mid-maze with the pen empty; 61% of the loss events coincide with the model's own respawn and 73% of lost ghosts return in the maze (median 36 steps). The drop vs Model 1 is mostly the extra own respawns (57 vs 42), not worse rendering.
 - Next: (1) gate the ghost metrics on the model's own respawns and frightened phases so the headline count is fair; (2) test the frightened-timer hypothesis (blue duration vs the real ~duration); (3) collisions, tunnels and ghost overlaps are exposure-bias candidates (hypothesis C) - 10 sampler steps or rolled-out-context fine-tuning.
 
+## PRE-REGISTRATION (2026-10-02, before the run exists): a second training seed of the strided Ms. Pac-Man model
+**Why.** The main real-game claim ("the strided context removes pen parking": 0/30 parked for ctx6s16 against 17/30
+for ctx4, paired difference −0.567 [−0.767, −0.367]) rests on one training run of ctx6s16. The parking of 4-frame
+models already appears in two independent runs (Model 1 16/30, ctx4 17/30). Proposed by review 4.
+
+**One variable: the training seed.** `m1-2M-ctx6s16-s1` = `configs/m1-2M-ctx6s16.yaml` trained with `--seed 1`
+instead of 0 (weight init, batch order, training noise). Same data cache, frozen split (sha256 `7ba75f8952e767b3`),
+offsets, 100k steps, batch, LR and every other setting; own checkpoint folder. No anneal, as for ctx6s16.
+
+**Evaluation, unchanged:** `eval/eval_rollouts.py` on the same 10 held-out episodes x 3 sampler seeds, evaluation
+seed 0, then `eval/pen_bootstrap.py --config configs/pen_stats_s1.yaml` (same occupancy test, 450-step horizon,
+10,000 episode resamples).
+
+**Criterion** (450 steps; fixed now):
+- Primary quantity: the paired difference in the fraction of rollouts parked 200+ steps, new seed minus ctx4, on the
+  same episodes, with its 95% episode-bootstrap CI.
+- Read from `eval/results/stats_s1/pen_bootstrap.json`: U = `["450"]["pairs"]["ctx6s16-s1 - ctx4"]["ci95"][1]` (the
+  CI's upper bound) and K = `["450"]["runs"]["ctx6s16-s1"]["parked_count"]`. "Below 0" means U < −1e-9.
+- **REPLICATES:** U < 0 and K ≤ 3.
+- **PARTIAL:** U < 0 and K > 3.
+- **DOES NOT REPLICATE:** U ≥ 0. This includes U exactly 0 and a CI entirely above 0.
+- **Valid only if** ctx6s16-s1 has 30 rollouts over 10 episodes and the recomputation prints REPRODUCED for both ctx4
+  and ctx6s16. Otherwise it is a pipeline failure: fix it and re-run the evaluation. It is not a result.
+- Also reported, not deciding: the median longest pen stay with its CI and the maximum (the informal "max ~91"
+  target, which seed 0 missed with 148), the 900-step numbers, and the standard coherence metrics.
+
+**What this cannot change.** The original ctx6s16 numbers stay as reported. The new run is reported beside them
+whatever it shows; if it does not replicate, the README and paper say that the main result did not survive a new
+seed. No further seeds are added after the result.
+
+**Pre-spend check.**
+- (a) Most likely failure: the pipeline, not the result (an earlier pod had a CUDA 12.8 driver; a cache on pod-local
+  disk). A real negative is possible too: seed 0's longest stay was 148 steps, so some rollouts of a new seed could
+  cross 200.
+- (b) Cheapest tests, run first by `tools/ctx6s16_seed1.sh`: pod created with `--min-cuda-version 13.0`; the split
+  checksum; CUDA available; a 150-step smoke run into a scratch folder that is then deleted.
+- (c) Differences from the original run: the seed, and whichever 4090 host is free (speed only). The training code has
+  gained options since the original run (prefetch, GPU-side noise, palette cache, label firewall); all are off for
+  this config.
+- **Abort rule:** only for pipeline failure (a gate fails, NaN loss, a file will not load). Never on results.
+- **Cost:** 100k steps took 3.0-5.0 h on 4090s ($0.74/h), plus about 0.5 h of evaluation: **about $3-4**. Balance
+  $18.99; this keeps it above $14.
+
 ## SEED REPLICATION VERDICT (2026-10-02): stage 1 REPLICATES; stage 2 PATTERN DOES NOT HOLD
 Scored by `tools/timer_seeds_verdict.py` against section 12 of `notes/timer_rule_design.md` (commit 465e277). 18 new
 runs, only the training seed changed; D0 passes in all. `seeds_verdict.json` sha256 `aa0dac629e6e8f2f`. Seed 0 is the

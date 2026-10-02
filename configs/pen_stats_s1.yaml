@@ -1,0 +1,18 @@
+# Pen-timer metrics for the training-seed replication of the strided model (eval/pen_bootstrap.py; pre-registered in
+# notes/handoff.md, 2026-10-02). Same settings as configs/pen_stats.yaml; only the runs and pairs differ.
+bootstrap: 10000
+seed: 0
+parked_len: 200                      # "pen occupied 200+ consecutive steps"
+horizons: [450, 900]                 # 450 = the registered horizon; 900 = supplementary
+runs:
+  ctx4: {config: configs/eval_m1-2M-ctx4.yaml, dir: eval/results/m1-2M-ctx4/model1}
+  ctx6s16: {config: configs/eval_m1-2M-ctx6s16.yaml, dir: eval/results/m1-2M-ctx6s16/model1}
+  ctx6s16-s1: {config: configs/eval_m1-2M-ctx6s16-s1.yaml, dir: eval/results/m1-2M-ctx6s16-s1/model1}
+original:                            # the recomputation must reproduce the numbers already reported for the old runs
+  ctx4: {parked: 17, median: 238}
+  ctx6s16: {parked: 0, median: 82}
+pairs:                               # paired differences on the same episodes (b - a)
+  - [ctx4, ctx6s16-s1]               # the registered comparison: new seed of the strided model vs ctx4
+  - [ctx4, ctx6s16]                  # the original, for reference
+  - [ctx6s16, ctx6s16-s1]            # seed vs seed
+out: eval/results/stats_s1
