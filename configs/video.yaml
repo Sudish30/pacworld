@@ -1,0 +1,22 @@
+# The 60-second explainer video (tools/make_video.py -> docs/pacworld_60s.mp4). No model is run: the game panels are
+# the saved evaluation rollouts used for docs/demo.gif (configs/pen_stats.yaml, demo_gif), and the chart shows the
+# registered seed-replication numbers (eval/results/timer/seeds_verdict.json).
+width: 1280
+height: 720
+fps: 30
+font: /System/Library/Fonts/Supplemental/Arial.ttf        # falls back to PIL's default font if missing
+font_bold: /System/Library/Fonts/Supplemental/Arial Bold.ttf
+out: docs/pacworld_60s.mp4
+pen_stats: configs/pen_stats.yaml        # which rollout, and which runs are the panels
+seeds_verdict: eval/results/timer/seeds_verdict.json
+real_max_stay: 91                        # the counter turns red when a pen stay exceeds the real game's maximum
+game_fps: 15                             # the rollouts play at the game's real speed
+seconds:
+  title: 4
+  rollout: 30                            # 450 steps at 15 fps
+  experiment: 20
+  end: 6
+pen_box_64: [26, 28, 39, 37]            # x0, y0, x1, y1 of the ghost pen at 64px (eval/pen_timer_analysis.geom), for the highlight
+colors: {bg: [15, 16, 32], text: [232, 232, 240], dim: [163, 164, 189], accent: [255, 210, 63], bad: [232, 93, 93], good: [96, 200, 140]}
+demo_url: sudish30.github.io/pacworld
+repo_url: github.com/Sudish30/pacworld

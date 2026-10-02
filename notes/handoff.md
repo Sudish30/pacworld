@@ -300,6 +300,22 @@ before any browser measurement of the final graph).
   exist, but a takedown request is possible and would be addressed to this repo.
 
 
+## STATE AT THE END OF THE AUTONOMOUS RUN (2026-10-02): the planned work is done; GPU work is stopped
+- **Demo:** live at https://sudish30.github.io/pacworld/ (redeployed after the second-seed wording change).
+- **arXiv source bundle: ready.** `bash tools/make_arxiv_bundle.sh` -> `paper/arxiv.tar.gz` (main.tex, main.bbl,
+  refs.bib, ghost_ratio.png; compiles on its own; untracked). No TODO is left in the paper. **Submitting is the
+  owner's step**; nothing was submitted.
+- **Video:** `docs/pacworld_60s.mp4` (60.0 s, 1280x720, silent, 5 MB), from `tools/make_video.py` and
+  `configs/video.yaml`. No model is run: it uses the saved evaluation rollouts and the registered replication
+  numbers. Review 9 (wording): APPROVE WITH CHANGES, applied (the picked example is disclosed on screen with the
+  17/30 vs 0/30 rates; "retrain" instead of "repeat"; the 80-step fix described as proposed after the first run and
+  registered before it ran).
+- **Spend:** balance **$16.21**; about $4.80 was spent in the autonomous run (seed replication $1.97, strided second
+  seed $2.77, a CPU pod and a duplicate pod for a few cents). About $13 usable remains. No pod exists; the network
+  volume holds all data and checkpoints.
+- **Nothing is registered or running.** Open for the owner: arXiv submission; posting the video; whether to keep the
+  remaining balance in reserve.
+
 ## VERDICT (2026-10-02): the second training seed of the strided Ms. Pac-Man model REPLICATES the pen result
 Scored by the rule registered in 1cd480b (section above). Run `m1-2M-ctx6s16-s1`: 100k steps in 198.5 min on an RTX
 4090, val denoise 0.0007, no NaN; wandb `p49ip8j5`; checkpoint sha256 `c03dcff0370491b0`.

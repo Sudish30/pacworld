@@ -3,6 +3,37 @@
 Short plain-language notes at each milestone: what happened, why, what it means, what's next. Newest first.
 Anything that would need one of the hard limits (see the Workflow note in `notes/handoff.md`) is also written here.
 
+## 2026-10-02 — The arXiv files are ready, the video is made, and the planned work is done
+
+**arXiv files: ready for you.** Run `bash tools/make_arxiv_bundle.sh`; it writes `paper/arxiv.tar.gz`, which is what
+arXiv's upload form takes (the paper's source, its reference list and its one figure). I checked that it compiles on
+its own. I have not submitted anything; that step is yours. Read the PDF first (`cd paper && ../.venv/bin/tectonic
+main.tex` makes `paper/main.pdf`): it carries your name.
+
+**Video:** `docs/pacworld_60s.mp4`, 60 seconds, silent, sized for LinkedIn.
+- 0-4 s: title.
+- 4-34 s: the real game beside the 4-frame model and the strided model, same start and key presses. A yellow box
+  marks the ghost pen, and a counter under each panel shows how long the pen has been occupied (it turns red past the
+  real game's maximum of 91 steps). The 4-frame model's counter runs past 300.
+- 34-54 s: the one-frame experiment as a bar chart: 37, 43, 45, 49, 47 parked out of 60 with the frame 81 steps back;
+  0 in all five with it exactly 80 back.
+- 54-60 s: the demo link.
+The reviewer made me add, on screen, that the rollout shown is a picked example and what the real rates are (17 of
+30 against 0 of 30), and that the 80-step fix was proposed after the first run and registered before it was tested.
+
+**Money.** Balance $16.21. The autonomous run spent about $4.80. No GPU is running, and the reviewer's decision is
+to stop experiments here and keep the rest in reserve.
+
+**The work is done.** Nothing else is planned or running. What is left is yours: submit to arXiv if you are happy
+with the PDF, and post the video.
+
+**Explain it back.** *In the video's bar chart, why are there five bars per row instead of one?*
+<details><summary>Answer</summary>
+Each bar is a separate model, trained from scratch with a different random seed. One bar could be luck. Five bars
+that all agree (many parked ghosts with the frame 81 steps back, none with it exactly 80 back) show the effect comes
+from where the frame sits, not from the luck of one training run.
+</details>
+
 ## 2026-10-02 — The main Ms. Pac-Man result held up in a second training run; one smaller claim did not
 
 **What happened.** The main result (older frames in the model's view stop it from parking ghosts) came from a single

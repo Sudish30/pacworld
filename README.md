@@ -4,6 +4,9 @@
 (desktop Chrome or Edge with a keyboard, 39 MB download, about 14 fps on an M3 Pro MacBook Pro against the game's 15).
 Every frame after the first is drawn by the network, and the world drifts the longer you play.
 
+A 60-second silent explainer (the parking failure side by side, then the one-frame experiment):
+[`docs/pacworld_60s.mp4`](docs/pacworld_60s.mp4).
+
 A playable neural world model of Ms. Pac-Man: an action-conditioned diffusion model in the style of
 [DIAMOND](https://arxiv.org/abs/2405.12399) that predicts the next frame from the last few frames and the
 player's action. There is no game engine underneath: when the model is served on a GPU, you play inside it in the
