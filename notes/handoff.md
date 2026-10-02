@@ -8,6 +8,15 @@
 
 Honest results only, including negative ones.
 
+**Added by the owner on 2026-10-02: after the current seed check, the top priority is a free, public, playable demo
+that ML recruiters can open from a link.**
+1. Feasibility pilot first: the served model in the browser, >= 10 fps on the owner's Mac in Chrome, frames close to
+   PyTorch. If it fails, report why and propose the next best free option. No GPU kept running for visitors.
+2. If it passes: a static page on GitHub Pages (arrow keys, reset, plain-English explanation, link to the paper),
+   linked at the top of the README.
+3. After the arXiv bundle is ready: a 60-second side-by-side video for LinkedIn in `docs/`.
+4. After each milestone, `notes/owner_updates.md` gets one "explain it back" question with its answer underneath.
+
 **Workflow (owner, 2026-10-01): autonomous operation with an independent reviewer.**
 - **Reviewer.** `.claude/agents/research-reviewer.md` defines a skeptical reviewer agent. It is run BEFORE any GPU
   spend, before committing any pre-registration, before any change to README/paper claims, before any push, and
@@ -165,6 +174,41 @@ seed. No further seeds are added after the result.
 - **Abort rule:** only for pipeline failure (a gate fails, NaN loss, a file will not load). Never on results.
 - **Cost:** 100k steps took 3.0-5.0 h on 4090s ($0.74/h), plus about 0.5 h of evaluation: **about $3-4**. Balance
   $18.99; this keeps it above $14.
+
+## BROWSER DEMO, FEASIBILITY PILOT: plan and pass bar (2026-10-02, written before any export or measurement; $0)
+**Question.** Can the served model (`m1-2M-ctx6s16-ft-uniform`, 18.8M parameters) run in a visitor's browser fast
+enough to play, with no server GPU?
+
+**What is built for the pilot** (`tools/export_onnx.py`, `web/`):
+- One ONNX graph holding the whole 3-step Euler sampler (the Karras noise levels are constants in the graph), so one
+  call makes one frame. Inputs: context frames (1, 30, 64, 64), the 10 context actions, the starting noise
+  (1, 3, 64, 64) and the context noise level. Output: the next frame.
+- Weights stored as 16-bit floats (about 38 MB to download instead of 75 MB). If 16-bit floats do not work in the
+  browser's WebGPU, the 32-bit file is measured instead and that is reported.
+- ONNX Runtime Web with the WebGPU backend. The page keeps the strided context buffer in JavaScript with the same rule
+  as `dataset.History` (last 97 frames and actions, offsets [-97..-17 step 16, -4..-1], clamped at the start), adds
+  the server's context noise (sigma 0.01), and starts from real frames of a held-out episode.
+
+**Pass bar (owner's, made measurable here before measuring):**
+- **Speed:** >= 10 frames per second in Chrome on the owner's Mac. Measured over 200 consecutive frames after 20
+  warm-up frames, timing the whole loop (context gather, noise, model call, canvas draw); the median frame time
+  decides.
+- **Fidelity:** on 16 fixed test cases (context, actions and starting noise taken from held-out episodes, saved to a
+  file), the browser's output frame against PyTorch's 32-bit output for the same inputs: **mean absolute difference
+  <= 1.0 on the 0-255 scale and at most 1% of pixel values differing by more than 8.** The same comparison is run in
+  Python (ONNX Runtime on the CPU) first.
+- Both must hold. Otherwise the pilot fails; the report says why and proposes the next best free option.
+
+**Pre-spend check ($0, so this is a time check).**
+- (a) Most likely failures: an operator the WebGPU backend lacks or runs slowly (GroupNorm, attention at 16x16 and
+  8x8); 16-bit overflow at the largest noise level (sigma 20); the integrated GPU being too slow for three UNet
+  passes per frame.
+- (b) Cheapest tests first: the Python parity check (minutes), then a single-frame call in the browser, then the
+  200-frame timing.
+- (c) Differences from the PyTorch server: 16-bit floats instead of bf16 autocast; WebGPU kernels; the random
+  numbers come from JavaScript, so rollouts are not bit-identical to the server's (single frames with the same noise
+  are compared instead); no watchdog detector in the page at first.
+- Not part of the pilot: the 4-frame model, the page design, hosting.
 
 ## RUNNING (2026-10-02): `m1-2M-ctx6s16-s1` on pod `r7bf2bbl3ff5se` (`pacworld-ctx6s16-s1`, RTX 4090, $0.74/h)
 - Review 5 (design): APPROVE WITH CHANGES, applied (criterion made unambiguous, validity condition, file gates).
