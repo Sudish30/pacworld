@@ -166,6 +166,12 @@ seed. No further seeds are added after the result.
 - **Cost:** 100k steps took 3.0-5.0 h on 4090s ($0.74/h), plus about 0.5 h of evaluation: **about $3-4**. Balance
   $18.99; this keeps it above $14.
 
+## RUNNING (2026-10-02): `m1-2M-ctx6s16-s1` on pod `r7bf2bbl3ff5se` (`pacworld-ctx6s16-s1`, RTX 4090, $0.74/h)
+- Review 5 (design): APPROVE WITH CHANGES, applied (criterion made unambiguous, validity condition, file gates).
+- Code checksums matched; gates passed; training started. Balance before: $18.98. `tools/ctx6s16_seed1.sh` logs to
+  `logs/ctx6s16_seed1.log` on the volume. When it prints `CTX6S16 SEED 1 FINISHED`: fetch
+  `eval/results/stats_s1/pen_bootstrap.json`, score by the registered rule, upload the wandb run, delete the pod.
+
 ## SEED REPLICATION VERDICT (2026-10-02): stage 1 REPLICATES; stage 2 PATTERN DOES NOT HOLD
 Scored by `tools/timer_seeds_verdict.py` against section 12 of `notes/timer_rule_design.md` (commit 465e277). 18 new
 runs, only the training seed changed; D0 passes in all. `seeds_verdict.json` sha256 `aa0dac629e6e8f2f`. Seed 0 is the

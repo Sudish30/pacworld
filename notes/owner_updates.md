@@ -20,6 +20,25 @@ different "seed", the random starting point of training, to see whether the resu
   prediction than to the "ideal observer" calculation (the best a model could do in theory), which expected the
   mid-gap cases to mostly work.
 
+**The numbers** ("parked" = tries, out of 60, in which the model never released the ghost):
+
+| the 80-step wait, past frame placed | first run | new run 1 | new run 2 | new run 3 | new run 4 |
+|---|---|---|---|---|---|
+| 81 steps back (one step off) | 37 parked | 43 | 45 | 49 | 47 |
+| exactly 80 steps back | 0 parked | 0 | 0 | 0 | 0 |
+
+| other waits that fall between two past frames (share of tries released; higher is better) | first run | new run 1 | new run 2 | needed |
+|---|---|---|---|---|
+| 72 steps | 0.78 | 0.63 | 0.67 | 0.80 |
+| 79 steps | 0.35 | 0.30 | 0.23 | 0.49 |
+| 88 steps | 0.55 | 0.60 | 0.40 | 0.77 |
+| 8 steps (very short gap) | 1.00 | 0.98 | 0.97 | 0.86 |
+| 24 steps (short gap) | 0.82 | 0.73 | 0.53 | 0.79 |
+
+So: 8 of the 18 new runs tested the headline and all 8 agreed with it. The other 10 tested "long gaps park, short
+gaps are fine": the long-gap half held in all 6 runs, the short-gap half failed (the 24-step wait fell below what
+was needed in both new runs).
+
 **How it is reported.** The failed check is listed under "What failed" in the README and named in the paper's
 abstract. The earlier verdicts are not changed after the fact; the README says which earlier pass did not hold up.
 The reviewer checked every number against the result files and made me tone down three sentences.
