@@ -2,8 +2,8 @@
 
 Writes to web/ (configs/web_demo.yaml):
   model_fp32.onnx / model_fp16.onnx  one graph = the whole Euler sampler of model1.euler_sample:
-        inputs  ctx (1, 3K, H, W) float32 in [-1, 1], actions (1, K) int64, noise (1, 3, H, W) float32 ~ N(0, 1),
-                ctx_sigma (1,) float32
+        inputs  ctx (1, 3K, H, W) float32 in [-1, 1] (context noise already added), actions (1, K) int64,
+                noise (1, 3, H, W) float32 ~ N(0, 1). The context-noise level is fixed in the graph (ctx_sigma).
         output  frame (1, 3, H, W) float32 in [-1, 1]
   cases.bin + cases.json   fixed test cases from held-out episodes with PyTorch's fp32 output for each
   starts.bin + starts.json real histories (uint8 frames and actions) the demo starts from

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pacworld: play inside a neural network's memory of Ms. Pac-Man</title>
-<meta name="description" content="A diffusion world model of Ms. Pac-Man running in your browser. No game engine: a neural network draws every frame.">
+<title>pacworld: Ms. Pac-Man drawn frame by frame by a neural network</title>
+<meta name="description" content="A diffusion world model of Ms. Pac-Man running in your browser. No game engine: after the first frame, a neural network draws every frame.">
 <style>
   :root { --bg: #0f1020; --panel: #191a30; --text: #e8e8f0; --dim: #a3a4bd; --accent: #ffd23f; --line: #2c2d4a; }
   @media (prefers-color-scheme: light) { :root { --bg: #f6f6fa; --panel: #ffffff; --text: #1b1c2b; --dim: #5b5c75; --accent: #b07a00; --line: #dcdce8; } }
@@ -40,34 +40,35 @@
       <button id="play">Load the model and play (39 MB)</button>
       <button id="reset" class="secondary" disabled>Reset</button>
     </div>
-    <div id="status">Move with the arrow keys or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>.</div>
+    <div id="status">Needs a desktop or laptop with a keyboard. Move with the arrow keys or <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd>.</div>
     <div id="fallback" hidden>
-      <p class="small">This browser has no WebGPU, which the live demo needs (use a recent desktop Chrome or Edge). Here is a recording instead: the real game, a model that sees only its last 4 frames, and the model on this page.</p>
-      <img class="fallback" src="demo.gif" alt="Side by side: the real game, a 4-frame model that leaves a ghost parked in its pen, and the strided-context model that releases it">
+      <p class="small">This browser has no WebGPU, which the live demo needs (use a recent desktop Chrome or Edge). Here is a recording instead: the real game, a model that sees only its last 4 frames, and the model on this page, replaying the same recorded moves. This run was picked by a fixed rule as an example of the 4-frame model's failure.</p>
+      <img class="fallback" loading="lazy" src="demo.gif" alt="Side by side: the real game, a 4-frame model that leaves a ghost parked in its pen, and the strided-context model that releases it">
     </div>
   </div>
 
   <div class="note">
-    <strong>What you are looking at.</strong> The game starts from about 6 seconds of real recorded frames. From the moment you press play, an 18.8-million-parameter diffusion model draws each new frame from a few past frames and your key press. Pac-Man, the ghosts and the pellets are just pixels it draws, and they can be wrong.
+    <strong>What you are looking at.</strong> The game starts from about 6 seconds of real recorded frames. From the moment you press play, an 18.8-million-parameter diffusion model draws each new frame from 10 of its past frames (the last 4, plus 6 older ones reaching back about 6 seconds) and your key press. Pac-Man, the ghosts and the pellets are just pixels it draws, and they can be wrong.
   </div>
 
   <h2>What to watch for</h2>
   <ul>
-    <li><strong>The ghost pen in the middle.</strong> In the real game, ghosts wait in the pen for a fixed time with no countdown on screen. A model that sees only its last 4 frames cannot tell how long a ghost has waited and tends to leave it parked there. The model on this page also sees 6 older frames, 16 steps apart, and releases ghosts about on time.</li>
+    <li><strong>The ghost pen in the middle.</strong> In the real game, ghosts wait in the pen for a fixed time with no countdown on screen. A model that sees only its last 4 frames cannot tell how long a ghost has waited and often leaves it parked there (in about half of our 30-second test runs). The model on this page also sees 6 older frames, 16 steps apart. In our tests it never left a ghost parked, and released them close to the real game's timing.</li>
     <li><strong>Drift.</strong> The longer you play, the further the world drifts from a real game. Ghosts can fade out, and Pac-Man can vanish. That is the model failing, not your browser. Press <em>Reset</em> to start again from real frames.</li>
-    <li><strong>Blue ghosts that stay blue.</strong> The power-pellet timer is a second hidden clock, and this model does not keep it.</li>
+    <li><strong>Blue ghosts that stay blue too long, or turn back too soon.</strong> The power-pellet timer is a second hidden clock, longer than anything this model can see, and it does not keep it.</li>
   </ul>
 
   <h2>The finding, in short</h2>
-  <p>A model like this can only keep time using the past frames it is shown. In a small test game, a model timed a hidden 80-step wait when one of its past frames sat exactly 80 steps back; with that frame 81 steps back instead, it left the ghost parked in most tries. That held in five separate training runs. Several other things we tried failed, and the write-up says so.</p>
-  <p><a href="https://github.com/Sudish30/pacworld">Code, results and paper draft on GitHub</a></p>
+  <p>A model like this can only keep time using the past frames it is shown. In a small test game, a model timed a hidden 80-step wait when one of its past frames sat exactly 80 steps back; with that frame 81 steps back instead, it left the ghost parked in most tries. Four more training runs, from new random seeds, gave the same result. Several other things we tried failed, including the same fix on a second Atari game and on the power-pellet timer, and the write-up says so.</p>
+  <p><a href="https://github.com/Sudish30/pacworld">Code, results and the paper draft (LaTeX source in paper/) on GitHub</a></p>
 
   <h2>Honest limits</h2>
   <ul class="small">
     <li>64×64 pixels, trained on recordings of an automated agent playing, not people.</li>
     <li>Built in the style of DIAMOND (Alonso et al., 2024); it is not DIAMOND.</li>
-    <li>The game's rate is 15 frames per second. Speed depends on your graphics hardware; the page shows what you are getting and never runs faster than 15.</li>
-    <li>Everything runs in your browser. Nothing you do is sent anywhere.</li>
+    <li>The game's rate is 15 frames per second. Speed depends on your graphics hardware; the page shows what you are getting and never runs faster than 15. On a 2023 MacBook Pro (M3 Pro) it runs at about 14. Below 15 the game plays in slow motion; it does not skip frames.</li>
+    <li>The network runs in your browser; your key presses never leave it. The page only downloads the model and its runtime from this site.</li>
+    <li>Most models here were trained once (one random seed); only the small test game above was repeated with new seeds.</li>
     <li>A research demo. Not affiliated with or endorsed by Bandai Namco or Atari; Ms. Pac-Man is their property.</li>
   </ul>
 </main>
@@ -92,7 +93,7 @@ async function loop() {
   const times = [];
   while (running) {
     const t0 = performance.now();
-    if (document.hidden) { await new Promise(r => setTimeout(r, 250)); continue; }
+    if (document.hidden) { $("status").textContent = "Paused while this tab is in the background."; await new Promise(r => setTimeout(r, 250)); continue; }
     if (pendingReset) { pendingReset = false; which = (which + 1) % meta.n; world.reset(which); showStart(); }
     const frame = await world.step(keysToAction(meta.keymap, keys));
     draw(screen, frame, image);

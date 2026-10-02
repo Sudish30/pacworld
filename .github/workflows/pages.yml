@@ -1,0 +1,36 @@
+# Deploys the browser demo to GitHub Pages. Run by hand (Actions -> "Deploy demo to GitHub Pages" -> Run workflow).
+# The page and its code come from this repo; the model and starting frames come from the assets of the release named
+# below (they are checked against configs/web_demo_assets.sha256); ONNX Runtime Web is fetched from npm at build time.
+name: Deploy demo to GitHub Pages
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Release tag holding model_fp16.onnx, starts.bin and starts.json
+        default: web-demo-v1
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the model and starting frames from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ inputs.release }}" --dir assets --pattern model_fp16.onnx --pattern starts.bin --pattern starts.json
+      - name: Build the site
+        run: bash tools/build_site.sh _site assets
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
