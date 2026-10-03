@@ -3,6 +3,30 @@
 Short plain-language notes at each milestone: what happened, why, what it means, what's next. Newest first.
 Anything that would need one of the hard limits (see the Workflow note in `notes/handoff.md`) is also written here.
 
+## 2026-10-02 — The paper is prepared for arXiv
+
+**What changed.** An Acknowledgments section with the AI-use disclosure (your wording, adjusted in one place for
+accuracy: within your rules, the AI reviewer approved designs and results and chose some next steps). A shorter
+abstract (about 250 words) that says what the problem was, what fixed it, the one-frame result and its replication,
+and that several tests failed. The detailed caveats moved to the Limitations section; none was dropped. Plainer
+sentences throughout. "Draft" is gone from the title page.
+
+**What did not change.** No number, claim or result. A script compared every number in the old and new text; the
+only differences are numbers that left the abstract and still appear in the body. The reviewer checked that every
+caveat survived and caught one slip I introduced while rewording (a sentence that blamed the strided model for a
+difference that belongs to the 8-frame model); it is fixed.
+
+**Where the files are.** `bash tools/make_arxiv_bundle.sh` rebuilds `paper/arxiv.tar.gz`; the PDF is
+`paper/main.pdf`. Submitting is yours.
+
+**Explain it back.** *Why does arXiv ask authors to disclose significant AI use, and what does our disclosure say?*
+<details><summary>Answer</summary>
+Readers and reviewers need to know who did what to judge the work. Ours says that AI assistants wrote code, ran
+experiments, reviewed designs and drafted the text; that you set the goals and rules, made the main decisions and
+take responsibility; and that within your rules an AI reviewer approved designs and results. It also points to the
+repository, where every pre-registration and review is logged, so anyone can check.
+</details>
+
 ## 2026-10-02 — The arXiv files are ready, the video is made, and the planned work is done
 
 **arXiv files: ready for you.** Run `bash tools/make_arxiv_bundle.sh`; it writes `paper/arxiv.tar.gz`, which is what

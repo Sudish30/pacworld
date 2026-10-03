@@ -300,6 +300,19 @@ before any browser measurement of the final graph).
   exist, but a takedown request is possible and would be addressed to this repo.
 
 
+## PAPER PREPARED FOR arXiv (2026-10-02; review 10 APPROVE WITH CHANGES, applied)
+- Owner's instructions: AI-use disclosure; abstract 150-250 words; plain prose; "Draft" removed; rebuild and push.
+- **Done.** Acknowledgments section with the AI-use disclosure (wording adjusted for accuracy on the reviewer's
+  point: within the owner's rules an AI reviewer approved designs and results and chose some next steps; repository
+  URL given). Abstract rewritten (about 250 words by the reviewer's count). Detailed caveats moved to Limitations and
+  all kept. Prose tightened throughout. Date is `\today`.
+- **Checks.** An automated comparison of every number in the old and new source found no changed value; the
+  differences are the numbers that left the abstract and remain in the body. The reviewer confirmed every disclosure
+  survives, caught one factual slip introduced by the rewrite (the pellet-IoU difference is ctx8 vs ctx4, not the
+  strided model; fixed), reverted "showing" to "suggesting" in contribution 3, restored the "earlier claims did not
+  survive the intervals" disclosure, and required the abstract to name the replication's failed second stage.
+- `paper/arxiv.tar.gz` rebuilt from the final source (main.tex, main.bbl, refs.bib, ghost_ratio.png).
+
 ## STATE AT THE END OF THE AUTONOMOUS RUN (2026-10-02): the planned work is done; GPU work is stopped
 - **Demo:** live at https://sudish30.github.io/pacworld/ (redeployed after the second-seed wording change).
 - **arXiv source bundle: ready.** `bash tools/make_arxiv_bundle.sh` -> `paper/arxiv.tar.gz` (main.tex, main.bbl,
