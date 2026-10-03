@@ -1,13 +1,14 @@
-% pacworld paper. Every number is read from the committed result files listed in notes/handoff.md.
+% pacworld paper. Every number is read from the committed result files of the project repository.
 \documentclass[11pt]{article}
 \usepackage[margin=1in]{geometry}
-\usepackage{amsmath,booktabs,graphicx,hyperref,xcolor}
+\usepackage{amsmath,booktabs,graphicx,xcolor}
+\usepackage[hidelinks]{hyperref}
 \usepackage[numbers]{natbib}
 
 \title{Hidden Timers and Context Offsets in a Diffusion World Model of Ms.~Pac-Man:\\
-A Pre-registered Study}
+Pre-registered Tests and Replications}
 \author{Sudish Mulakala}
-\date{\today}
+\date{October 2, 2026}
 
 \begin{document}
 \maketitle
@@ -19,9 +20,10 @@ to 91 steps with no on-screen countdown. Models that see only their last 4 or 8 
 rollouts on held-out episodes, 16--23 of 30 rollouts keep the pen occupied for 200+ steps, against none in the real
 game. A 10-frame context with a 97-step reach removes the parking (0 of 30; paired difference to 4 frames $-0.57$,
 95\% CI $[-0.77,-0.37]$ over episodes), and a pre-registered second training seed reproduces this. We propose a
-rule: a model can time a hidden event of period $N$ only as precisely as its context offsets resolve $-N$. A
+context-offset hypothesis: a model can time a hidden event of period $N$ only as precisely as its context offsets
+resolve $-N$. A
 pre-registered sweep of 23 small models on a synthetic game, scored against an ideal observer with the same
-offsets, supports the rule in part: no model times a period beyond its reach, a frame exactly $N$ steps back gives
+offsets, supports it in part: no model times a period beyond its reach, a frame exactly $N$ steps back gives
 observer-level timing at three of four long periods, and one period between two frames parks. Moving a single frame
 from $-81$ to $-80$ takes that model from parking in 37 of 60 starts to none, in the original run and four further
 training seeds. Several registered tests failed, among them the replication's second stage, a second real game, a
@@ -40,8 +42,8 @@ We make four contributions.
 \item \textbf{A documented failure and a fix.} With a 4- or 8-frame context, our 18.8M-parameter diffusion model
 parks ghosts in the pen. A strided context with a 97-step reach, a known design (Sec.~\ref{sec:related}), removes
 the parking (Sec.~\ref{sec:context}).
-\item \textbf{A testable rule with an ideal-observer prediction,} and a pre-registered synthetic sweep in which it
-holds in part (Sec.~\ref{sec:rule}).
+\item \textbf{A testable hypothesis with an ideal-observer prediction,} and a pre-registered synthetic sweep in which
+it holds in part (Sec.~\ref{sec:rule}).
 \item \textbf{A one-variable follow-up} suggesting that timing depends on where the context frames sit, not only on how
 far they reach. Moving one frame by one step fixes a parked period, in the original run and in all four seeds of a
 pre-registered replication (Sec.~\ref{sec:followup}).
@@ -149,9 +151,9 @@ event that occurs 0.28 times per episode, about 0.05\% of training windows, whic
 \end{itemize}
 Reach therefore appears necessary but not sufficient.
 
-\section{The hidden-timer rule}
+\section{The context-offset hypothesis}
 \label{sec:rule}
-\paragraph{Rule.} An autoregressive frame model sees only its context. It can time a hidden-timer event of period
+\paragraph{Hypothesis.} An autoregressive frame model sees only its context. It can time a hidden-timer event of period
 $N$ only as precisely as its context offsets resolve $-N$:
 \begin{itemize}
 \item exactly, if $-N$ is an offset;
@@ -162,7 +164,7 @@ and a sampling model may do worse by parking.
 
 \paragraph{Ideal observer.} For each layout we estimate from training data the hazard
 $P(\text{event next}\mid\text{state at the layout's offsets})$ and roll this observer out from the same test starts
-as the models. It is the best that any model with those offsets can do, and its curve is the rule's prediction. It
+as the models. It is the best that any model with those offsets can do, and its curve is the hypothesis's prediction. It
 is computed and committed before any model trains.
 
 \paragraph{Synthetic game.} Frames are $16\times16$. A ghost is penned for exactly $N$ frames, and nothing on screen
@@ -174,8 +176,8 @@ reach not to beat an observer blind to the capture.
 \paragraph{Criteria.} R1 (exact offset in reach): on-time fraction at tolerance 2 $\ge\min(0.80,\text{ideal}-0.10)$.
 R2 (gap in reach): release fraction $\ge\min(0.90,\text{ideal}-0.10)$ and median $|\text{lag}-N|\le$ ideal median
 $+3$. R3 (out of reach, $N\ge1.5R$): on-time fraction at tolerance $\max(2,0.1N)$ $\le$ ideal $+0.15$. R4: at
-$N\in\{33,65,97\}$, S10 passes R1 and C10 passes R3. The rule holds if all pass, holds in part if every R3 cell
-passes but some R1 or R2 cell fails, and fails if any R3 cell fails. One R2 bar was amended before any model
+$N\in\{33,65,97\}$, S10 passes R1 and C10 passes R3. The hypothesis holds if all pass, holds in part if every R3
+cell passes but some R1 or R2 cell fails, and fails if any R3 cell fails. One R2 bar was amended before any model
 trained, because the observer itself parks in the gap cells; the amendment is in the pre-registration.
 
 \begin{table}[h]
@@ -219,7 +221,7 @@ estimates decide each criterion.}
 \label{tab:timer}
 \end{table}
 
-\paragraph{Verdict: the rule holds in part.}
+\paragraph{Verdict: the hypothesis holds in part.}
 \begin{itemize}
 \item \textbf{No model times a period beyond its reach.} All 10 R3 cells pass. Instead of the observer's geometric
 wait, the out-of-reach models mostly park: they release in 0.12--0.30 of starts at long periods (C4 $N\ge33$; C10
@@ -247,7 +249,7 @@ at $-81$ moved to $-80$, with the same reach, frame count, game, model, steps, s
 registered prediction: the on-frame period $N{=}80$ passes R1, and the periods between frames of S10b ($N{=}72$, 79,
 88) park, where parking means a release fraction below the R2 release bar.
 
-This prediction differs from the original rule, which said that between two frames the timing is spread over the
+This prediction differs from the original hypothesis, which said that between two frames the timing is spread over the
 gap. The sweep instead showed parking at $N{=}80$, and the follow-up's prediction was registered after seeing that.
 The follow-up therefore tests an explanation suggested by the sweep. The ideal observer, computed first, disagreed
 in part: it releases in about 0.9 of starts mid-gap ($N{=}72$, 88) and in 0.59 at the end of a gap ($N{=}79$).
@@ -308,8 +310,7 @@ S10 $N{=}24$: release (bar 0.791) & 0.817 & 0.733 & 0.533 & & \\
 \bottomrule
 \end{tabular}
 \caption{Training-seed replication. Seed 0 is the original run. A gap cell parks when its release fraction is below
-its bar. Point estimates; per-run 95\% bootstrap CIs over the 20 test episodes are in \texttt{notes/handoff.md} in the project
-repository.}
+its bar. Point estimates; per-run 95\% bootstrap CIs are in Appendix~\ref{app:seeds}.}
 \label{tab:seeds}
 \end{table}
 
@@ -342,8 +343,8 @@ in at least 0.50 of starts. It released in 0.486 $[0.445, 0.525]$.
 the gate for training pac-C10. After 115k steps, pac-S10 releases in 0.986 $[0.976, 0.994]$ of starts and parks in 9
 of 622, but its median timing error is 12 $[10, 13]$ steps against a bar of 5, and it is on time in 0.22
 $[0.18, 0.25]$ of starts against the observer's 0.89. Its lags have 10th/25th/50th/75th/90th percentiles
-28/33/44/72/96 against a truth of 35--36. P-S fails, pac-C10 was not trained, and the rule is not confirmed on this
-game. Before the 15k-step low-LR anneal, the same model released in only 0.678 of starts with a median error of 65.
+28/33/44/72/96 against a truth of 35--36. P-S fails, pac-C10 was not trained, and the hypothesis is not confirmed on
+this game. Before the 15k-step low-LR anneal, the same model released in only 0.678 of starts with a median error of 65.
 
 \paragraph{A post-hoc reading.} The 35--36-step stay falls between S10's frames at $-33$ and $-49$. Loose timing and
 parking between frames is what the synthetic follow-up found, so the failure is consistent with it. This reading was
@@ -357,8 +358,8 @@ and 2-frame pooling, and rebuilt our detectors for its geometry. All validity ch
 
 \paragraph{The registered prediction failed.} We had predicted that it would park ghosts in at least 10 of 30
 rollouts. It parked in 0 of 30. The pre-registration stated that a failure with at least 5 of the model's own ghost
-respawns ``counts against the rule''; DIAMOND had 6. We report it as a failed prediction that, by its registered terms,
-counts against the rule, and we do not redefine the test.
+respawns ``counts against the rule'' (the pre-registration's term for the hypothesis); DIAMOND had 6. We report it
+as a failed prediction that, by its registered terms, counts against the hypothesis, and we do not redefine the test.
 
 \paragraph{A post-hoc reading.} The criterion assumed that ghosts survive long enough to be penned. Parking can only
 be measured while ghosts exist, and DIAMOND's ghosts vanish (Fig.~\ref{fig:ghosts}). Its ghost count at 450 steps is
@@ -429,8 +430,8 @@ episode-level intervals were computed after the original runs, and several earli
 correction for multiple comparisons, so intervals that barely exclude zero should be read with caution.
 \item \textbf{The synthetic tests} isolate timing but have no action conditioning. Their out-of-reach criterion is
 one-sided, so parking passes it. The follow-up is one layout with 60 starts per cell.
-\item \textbf{The second real game} failed its registered test, and its C10 model was never trained, so the rule has
-no confirmation on a second real game. The strided run there was resumed once from the pilot's 20k-step checkpoint.
+\item \textbf{The second real game} failed its registered test, and its C10 model was never trained, so the hypothesis
+has no confirmation on a second real game. The strided run there was resumed once from the pilot's 20k-step checkpoint.
 The learning rate (constant after warm-up), weights, EMA and optimizer state match an uninterrupted run, but the
 batch and noise stream was re-seeded, so it is not bit-identical to one.
 \item The frightened timer remains unsolved.
@@ -450,7 +451,7 @@ a hidden game clock is kept over hundreds of steps.
 \paragraph{Memory and long context in video world models.} A growing line of work extends what a video model can
 remember: training schemes for long rollouts and variable-length history
 \cite{chen2024diffusionforcing,song2025history}, state-space and memory-bank architectures
-\cite{po2025longcontext,xiao2025worldmem,lee2025edeline}, retrieval of relevant past frames
+\cite{po2025longcontext,xiao2025worldmem,lee2025edeline,savov2025statespacediffuser}, retrieval of relevant past frames
 \cite{yu2025contextmemory,chen2025vrag}, and compressed or non-uniform history contexts
 \cite{zhang2025framepack,gu2025far}. A context that mixes recent frames with sparser older ones is therefore not
 new, and we do not claim the strided context as a contribution. These methods are evaluated mostly on spatial or
@@ -484,6 +485,48 @@ results, and draft the text, including this paper. The author directed the proje
 and takes full responsibility for the paper's contents. Within those rules, an AI reviewer approved designs and
 results and chose some next steps. The experiments, pre-registrations and reviews are logged in the project
 repository, \url{https://github.com/Sudish30/pacworld}.
+
+\appendix
+\section{Per-run intervals of the seed replication}
+\label{app:seeds}
+\begin{table}[h]
+\centering\small
+\begin{tabular}{llccccc}
+\toprule
+cell & seed & release [95\% CI] & release bar & on-time, tol 2 [95\% CI] & R1 bar & parked of 60 \\
+\midrule
+S10 $N{=}80$ & 0 & 0.383 [0.27, 0.50] & 0.494 & 0.117 [0.05, 0.18] & 0.025 & 37 \\
+S10 $N{=}80$ & 1 & 0.283 [0.18, 0.38] & 0.494 & 0.083 [0.03, 0.15] & 0.025 & 43 \\
+S10 $N{=}80$ & 2 & 0.250 [0.13, 0.37] & 0.494 & 0.050 [0.00, 0.10] & 0.025 & 45 \\
+S10 $N{=}80$ & 3 & 0.183 [0.12, 0.25] & 0.494 & 0.083 [0.03, 0.15] & 0.025 & 49 \\
+S10 $N{=}80$ & 4 & 0.217 [0.13, 0.30] & 0.494 & 0.083 [0.03, 0.15] & 0.025 & 47 \\
+S10b $N{=}80$ & 0 & 1.000 [1.00, 1.00] & 0.900 & 0.650 [0.53, 0.77] & 0.616 & 0 \\
+S10b $N{=}80$ & 1 & 1.000 [1.00, 1.00] & 0.900 & 0.650 [0.55, 0.75] & 0.616 & 0 \\
+S10b $N{=}80$ & 2 & 1.000 [1.00, 1.00] & 0.900 & 0.700 [0.58, 0.82] & 0.616 & 0 \\
+S10b $N{=}80$ & 3 & 1.000 [1.00, 1.00] & 0.900 & 0.733 [0.62, 0.83] & 0.616 & 0 \\
+S10b $N{=}80$ & 4 & 1.000 [1.00, 1.00] & 0.900 & 0.717 [0.60, 0.83] & 0.616 & 0 \\
+S10b $N{=}72$ & 0 & 0.783 [0.70, 0.87] & 0.798 & 0.233 [0.15, 0.33] & 0.217 & 13 \\
+S10b $N{=}72$ & 1 & 0.633 [0.52, 0.75] & 0.798 & 0.150 [0.07, 0.23] & 0.217 & 22 \\
+S10b $N{=}72$ & 2 & 0.667 [0.55, 0.77] & 0.798 & 0.167 [0.08, 0.25] & 0.217 & 20 \\
+S10b $N{=}79$ & 0 & 0.350 [0.25, 0.45] & 0.494 & 0.117 [0.05, 0.18] & 0.020 & 39 \\
+S10b $N{=}79$ & 1 & 0.300 [0.20, 0.40] & 0.494 & 0.083 [0.03, 0.15] & 0.020 & 42 \\
+S10b $N{=}79$ & 2 & 0.233 [0.13, 0.35] & 0.494 & 0.067 [0.02, 0.13] & 0.020 & 46 \\
+S10b $N{=}88$ & 0 & 0.550 [0.42, 0.67] & 0.774 & 0.183 [0.08, 0.28] & 0.154 & 27 \\
+S10b $N{=}88$ & 1 & 0.600 [0.48, 0.70] & 0.774 & 0.200 [0.10, 0.32] & 0.154 & 24 \\
+S10b $N{=}88$ & 2 & 0.400 [0.28, 0.50] & 0.774 & 0.133 [0.07, 0.20] & 0.154 & 36 \\
+S10 $N{=}8$ & 0 & 1.000 [1.00, 1.00] & 0.855 & 0.383 [0.28, 0.48] & 0.351 & 0 \\
+S10 $N{=}8$ & 1 & 0.983 [0.95, 1.00] & 0.855 & 0.367 [0.22, 0.52] & 0.351 & 1 \\
+S10 $N{=}8$ & 2 & 0.967 [0.92, 1.00] & 0.855 & 0.350 [0.23, 0.48] & 0.351 & 2 \\
+S10 $N{=}24$ & 0 & 0.817 [0.72, 0.90] & 0.791 & 0.317 [0.22, 0.43] & 0.226 & 11 \\
+S10 $N{=}24$ & 1 & 0.733 [0.65, 0.82] & 0.791 & 0.267 [0.15, 0.38] & 0.226 & 16 \\
+S10 $N{=}24$ & 2 & 0.533 [0.43, 0.65] & 0.791 & 0.150 [0.07, 0.25] & 0.226 & 28 \\
+\bottomrule
+\end{tabular}
+\caption{Every run of the training-seed replication (Sec.~\ref{sec:followup}). Seed 0 is the original run. CIs are
+95\% bootstrap intervals over the 20 test episodes. A gap cell parks when its release fraction is below its bar; the
+on-frame cell (S10b $N{=}80$) is scored by R1. The same table is \texttt{results/supplementary\_results.md} in the
+repository.}
+\end{table}
 
 \bibliographystyle{plainnat}
 \bibliography{refs}
