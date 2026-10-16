@@ -300,6 +300,15 @@ before any browser measurement of the final graph).
   exist, but a takedown request is possible and would be addressed to this repo.
 
 
+## arXiv SUBMISSION PREPARED (2026-10-16; review 13 APPROVE). Nothing submitted; submitting is the owner's step
+- Paper date set to October 16, 2026 (the only paper change). PDF: 14 pages.
+- `paper/arxiv.tar.gz` rebuilt and tested from clean temp folders: builds with BibTeX, and with the shipped main.bbl
+  alone (TeX passes only, refs.bib removed): 14 pages, 0 undefined citations; the shipped main.bbl is identical to a
+  fresh BibTeX run. arXiv uses pdfLaTeX (not installed here); the source is pure ASCII with standard packages, so the
+  reviewer rates the risk low. The owner should check arXiv's preview shows 14 pages.
+- `paper/arxiv_submission_info.txt`: title, author, plain-ASCII abstract generated from the LaTeX (1428 characters,
+  checked word for word by the reviewer), comments, categories cs.LG + cs.AI, license.
+
 ## FINAL PAPER POLISH (2026-10-16; review 12 APPROVE WITH CHANGES, applied)
 - Owner's six changes, no number or result changed: "falls by -0.567" -> "changes by" (and the 900-step figure);
   capitals protected in refs.bib ({Atari}, {E}valuating, plus {Genie}, {Arcade Learning Environment}, {Diffusion

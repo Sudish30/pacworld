@@ -1,0 +1,26 @@
+arXiv submission info for pacworld (copy each field into the arXiv form; nothing has been submitted)
+Source bundle: paper/arxiv.tar.gz (upload as is; it contains main.tex, main.bbl, refs.bib, ghost_ratio.png;
+rebuild with: bash tools/make_arxiv_bundle.sh)
+After uploading, check that arXiv's preview PDF compiles and shows 14 pages; if the count differs, change the
+number in Comments before submitting.
+
+Title:
+Hidden Timers and Context Offsets in a Diffusion World Model of Ms. Pac-Man: Pre-registered Tests and Replications
+
+Authors:
+Sudish Mulakala
+
+Abstract (1428 characters; arXiv limit 1,920):
+Pixel diffusion world models predict the next frame from a few past frames, so they cannot see state the screen does not show. We study a hidden timer in a DIAMOND-style model of Ms. Pac-Man, whose ghosts wait in a pen for up to 91 steps with no on-screen countdown. Models that see only their last 4 or 8 frames park the ghosts: in 450-step rollouts on held-out episodes, 16-23 of 30 rollouts keep the pen occupied for 200+ steps, against none in the real game. A 10-frame context with a 97-step reach removes the parking (0 of 30; paired difference to 4 frames -0.57, 95% CI [-0.77, -0.37] over episodes), and a pre-registered second training seed reproduces this. We propose a context-offset hypothesis: a model can time a hidden event of period N only as precisely as its context offsets resolve -N. A pre-registered sweep of 23 small models on a synthetic game, scored against an ideal observer with the same offsets, supports it in part: no model times a period beyond its reach, a frame exactly N steps back gives observer-level timing at three of four long periods, and one period between two frames parks. Moving a single frame from -81 to -80 takes that model from parking in 37 of 60 starts to none, in the original run and four further training seeds. Several registered tests failed, among them the replication's second stage, a second real game, a DIAMOND prediction and two latent-action models; all are reported.
+
+Comments:
+14 pages. Code: https://github.com/Sudish30/pacworld. Playable demo: https://sudish30.github.io/pacworld/
+
+Primary category:
+cs.LG
+
+Cross-list:
+cs.AI
+
+License:
+arXiv.org perpetual, non-exclusive license
