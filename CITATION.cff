@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the paper below."
+title: "pacworld: a diffusion world model of Ms. Pac-Man"
+authors:
+  - family-names: Mulakala
+    given-names: Sudish
+repository-code: "https://github.com/Sudish30/pacworld"
+url: "https://sudish30.github.io/pacworld/"
+license: MIT
+preferred-citation:
+  type: generic
+  title: "Hidden Timers and Context Offsets in a Diffusion World Model of Ms. Pac-Man: Pre-registered Tests and Replications"
+  authors:
+    - family-names: Mulakala
+      given-names: Sudish
+  year: 2026
+  date-published: "2026-10-16"
+  publisher:
+    name: Zenodo
+  doi: "10.5281/zenodo.23413087"
+  url: "https://doi.org/10.5281/zenodo.23413087"
+  identifiers:
+    - type: doi
+      value: "10.5281/zenodo.23413087"
+      description: "This version of the preprint"
+    - type: doi
+      value: "10.5281/zenodo.23413086"
+      description: "Concept DOI: all versions"

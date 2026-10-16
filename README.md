@@ -1,6 +1,9 @@
 # pacworld
 
-**[Play it in your browser](https://sudish30.github.io/pacworld/)**: the model runs on your own GPU through WebGPU
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23413087.svg)](https://doi.org/10.5281/zenodo.23413087)
+
+**[Play it in your browser](https://sudish30.github.io/pacworld/)** · **[Read the paper](https://doi.org/10.5281/zenodo.23413087)** (preprint on
+Zenodo; LaTeX source in [`paper/`](paper/)). The demo runs the model on your own GPU through WebGPU
 (desktop Chrome or Edge with a keyboard, 39 MB download, about 14 fps on an M3 Pro MacBook Pro against the game's 15).
 Every frame after the first is drawn by the network, and the world drifts the longer you play.
 
@@ -51,14 +54,14 @@ only its last 4 frames cannot observe them, so it parks the ghosts in the pen. A
 frames but a longer *reach* (4 recent frames plus 6 frames 16 steps apart, spanning 97 steps) removes the parking.
 The frightened-phase timer is still unsolved. Mixing recent frames with sparser older ones is a known design in video
 models, not something new here; what this repo adds is the measurement of what such a context can and cannot time
-(related work is in the paper draft).
+(related work is in the [paper](https://doi.org/10.5281/zenodo.23413087)).
 
 **How the work was done.** The first diagnosis of the parking was exploratory. From the context comparison on, every
 experiment's criterion was written before its result: informally for the context comparison (pen stays should match
 the real game, "max ~91, no 200+ runs"; the no-200+ part held, but the strided model's longest stay was 148), and as
 committed pre-registrations after that. Failed predictions are reported as failures. Confidence intervals are
-95% bootstrap intervals over held-out *episodes*, not rollouts, and were computed after the original runs. The full log is [`notes/handoff.md`](notes/handoff.md); a paper draft is in
-[`paper/`](paper/).
+95% bootstrap intervals over held-out *episodes*, not rollouts, and were computed after the original runs. The full log is [`notes/handoff.md`](notes/handoff.md); the paper is on
+[Zenodo](https://doi.org/10.5281/zenodo.23413087), with its LaTeX source in [`paper/`](paper/).
 
 ## Results
 
@@ -195,7 +198,7 @@ starts.
   - N = 80, between two frames: the model parks in 37 of 60 starts. Its release fraction is 0.38 [0.27, 0.50] against
     a bar of 0.49.
 
-The per-cell table is in the handoff and the paper draft.
+The per-cell table is in the handoff and the paper.
 
 ### Follow-up: moving one frame fixes N = 80
 
@@ -381,7 +384,7 @@ tools/               data and infrastructure helpers: event indexing, val-split 
                      cache verification, benchmarks, pod orchestration scripts
 configs/             every hyperparameter, one YAML per run. No magic numbers in scripts
 notes/handoff.md     the running lab notebook: findings, pre-registered predictions and their verdicts
-paper/               LaTeX draft of the write-up
+paper/               LaTeX source of the paper
 ```
 
 `data/`, `checkpoints/`, `outputs/`, `logs/` and `eval/results/` are generated and not tracked.
@@ -452,6 +455,23 @@ A CUDA GPU for training. Measured on single RTX 4090s: 100k steps at 64x64 took 
 layout and the host (3.3 h for the 4-frame Model 1, 5.0 h for the strided run on a slower host), and the 128x128
 variant took 8.2 h. Recording, playback and the detectors are CPU-only. `requirements.txt` pins the versions that
 ran on the training machine (Python 3.12, PyTorch 2.14 with CUDA 13).
+
+## Citation
+
+The paper is a preprint on Zenodo: DOI [10.5281/zenodo.23413087](https://doi.org/10.5281/zenodo.23413087). The concept DOI
+[10.5281/zenodo.23413086](https://doi.org/10.5281/zenodo.23413086) always resolves to the latest version.
+[`CITATION.cff`](CITATION.cff) holds the same information.
+
+```bibtex
+@misc{mulakala2026hiddentimers,
+  author    = {Sudish Mulakala},
+  title     = {{Hidden Timers and Context Offsets in a Diffusion World Model of Ms.~Pac-Man: Pre-registered Tests and Replications}},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.23413087},
+  url       = {https://doi.org/10.5281/zenodo.23413087}
+}
+```
 
 ## License
 

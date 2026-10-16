@@ -300,6 +300,22 @@ before any browser measurement of the final graph).
   exist, but a takedown request is possible and would be addressed to this repo.
 
 
+## PREPRINT PUBLISHED ON ZENODO (2026-10-16); arXiv pending an endorsement
+- The owner published the paper on Zenodo: DOI 10.5281/zenodo.23413087 (https://doi.org/10.5281/zenodo.23413087);
+  concept DOI for all versions 10.5281/zenodo.23413086. The record's title, author and DOI were checked against the
+  paper (resource type preprint, license CC BY 4.0).
+- The Zenodo PDF carries the date "October 2, 2026": it was built from commit 0573b41, before f3ea894 changed only the
+  date line (review 14 checked the Zenodo PDF: 14 pages, created between the two commits; text spot-checked). The arXiv
+  bundle says October 16. If the owner wants them to match, uploading a new Zenodo version under the same concept DOI
+  is the owner's step.
+- arXiv is pending an endorsement for the owner's first submission. The endorsement code is in the owner's email and
+  is deliberately not recorded in this repository.
+- README: Zenodo DOI badge at the top, a paper link next to the demo link, "paper draft" wording replaced by links to
+  the published paper, and a Citation section with a BibTeX entry. `CITATION.cff` added (repository metadata plus the
+  paper as preferred citation; checked against the CFF 1.2.0 schema).
+- Not changed: the live demo page (`web/index.html`) still says "paper draft (LaTeX source in paper/)"; updating it
+  needs a Pages redeploy.
+
 ## arXiv SUBMISSION PREPARED (2026-10-16; review 13 APPROVE). Nothing submitted; submitting is the owner's step
 - Paper date set to October 16, 2026 (the only paper change). PDF: 14 pages.
 - `paper/arxiv.tar.gz` rebuilt and tested from clean temp folders: builds with BibTeX, and with the shipped main.bbl
