@@ -7,7 +7,7 @@
 
 \title{Hidden Timers and Context Offsets in a Diffusion World Model of Ms.~Pac-Man:\\
 Pre-registered Tests and Replications}
-\author{Sudish Mulakala}
+\author{Sudish Mulakala\\Independent researcher}
 \date{October 2, 2026}
 
 \begin{document}
@@ -51,7 +51,8 @@ pre-registered replication (Sec.~\ref{sec:followup}).
 (Sec.~\ref{sec:realgame}), a failed prediction about DIAMOND (Sec.~\ref{sec:diamond}) and two failed latent-action
 models (Sec.~\ref{sec:lam}). Confidence intervals are bootstrapped over held-out episodes.
 \end{enumerate}
-Sec.~\ref{sec:limits} lists the limits of the pre-registration and of the evidence.
+Sec.~\ref{sec:limits} lists the limits of the pre-registration and of the evidence. The code is at
+\url{https://github.com/Sudish30/pacworld}, and a playable in-browser demo is at \url{https://sudish30.github.io/pacworld/}.
 
 \section{Setup}
 \label{sec:setup}
@@ -96,7 +97,9 @@ ctx6s16, second seed & 0/30$^*$ & 104 [93, 107] & 17.8 [13.0, 23.1] & 0.38 [0.34
 \bottomrule
 \end{tabular}}
 \caption{Pen-timer and coherence metrics at the 450-step horizon. Brackets: 95\% bootstrap CIs over episodes; for
-parking, the CI of the parked fraction. All four originally reported pen numbers reproduce exactly. $^*$With no
+parking, the CI of the parked fraction. The parked counts and median stays of Model 1, ctx4, ctx8 and ctx6s16
+were first computed without intervals; recomputing them with the bootstrap gives the same values to the precision
+first reported. $^*$With no
 parked rollout in any of the 10 episodes, the bootstrap interval is degenerate; the exact one-sided 95\% upper bound
 on the per-episode parking rate is 0.26.}
 \label{tab:context}
@@ -104,8 +107,8 @@ on the per-episode parking rate is 0.26.}
 
 \paragraph{What holds.}
 \begin{itemize}
-\item The strided context removes the parking. The parked fraction falls by $-0.567$ $[-0.767,-0.367]$ against
-ctx4, and by $-0.833$ $[-0.933,-0.733]$ in 900-step rollouts.
+\item The strided context removes the parking. Against ctx4, the parked fraction changes by $-0.567$
+$[-0.767,-0.367]$, and by $-0.833$ $[-0.933,-0.733]$ in 900-step rollouts.
 \item A second training seed reproduces this. We pre-registered one repeat of ctx6s16 from a new seed. It counts as
 a replication if the CI of its paired difference to ctx4 lies below 0 and at most 3 of 30 rollouts park. It gave 0 of
 30 parked and the same difference, $-0.567$ $[-0.767,-0.367]$. Timing is not exact in either seed: the new seed's
@@ -495,36 +498,37 @@ repository, \url{https://github.com/Sudish30/pacworld}.
 \toprule
 cell & seed & release [95\% CI] & release bar & on-time, tol 2 [95\% CI] & R1 bar & parked of 60 \\
 \midrule
-S10 $N{=}80$ & 0 & 0.383 [0.27, 0.50] & 0.494 & 0.117 [0.05, 0.18] & 0.025 & 37 \\
-S10 $N{=}80$ & 1 & 0.283 [0.18, 0.38] & 0.494 & 0.083 [0.03, 0.15] & 0.025 & 43 \\
-S10 $N{=}80$ & 2 & 0.250 [0.13, 0.37] & 0.494 & 0.050 [0.00, 0.10] & 0.025 & 45 \\
-S10 $N{=}80$ & 3 & 0.183 [0.12, 0.25] & 0.494 & 0.083 [0.03, 0.15] & 0.025 & 49 \\
-S10 $N{=}80$ & 4 & 0.217 [0.13, 0.30] & 0.494 & 0.083 [0.03, 0.15] & 0.025 & 47 \\
+S10 $N{=}80$ & 0 & 0.383 [0.27, 0.50] & 0.494 & 0.117 [0.05, 0.18] & -- & 37 \\
+S10 $N{=}80$ & 1 & 0.283 [0.18, 0.38] & 0.494 & 0.083 [0.03, 0.15] & -- & 43 \\
+S10 $N{=}80$ & 2 & 0.250 [0.13, 0.37] & 0.494 & 0.050 [0.00, 0.10] & -- & 45 \\
+S10 $N{=}80$ & 3 & 0.183 [0.12, 0.25] & 0.494 & 0.083 [0.03, 0.15] & -- & 49 \\
+S10 $N{=}80$ & 4 & 0.217 [0.13, 0.30] & 0.494 & 0.083 [0.03, 0.15] & -- & 47 \\
 S10b $N{=}80$ & 0 & 1.000 [1.00, 1.00] & 0.900 & 0.650 [0.53, 0.77] & 0.616 & 0 \\
 S10b $N{=}80$ & 1 & 1.000 [1.00, 1.00] & 0.900 & 0.650 [0.55, 0.75] & 0.616 & 0 \\
 S10b $N{=}80$ & 2 & 1.000 [1.00, 1.00] & 0.900 & 0.700 [0.58, 0.82] & 0.616 & 0 \\
 S10b $N{=}80$ & 3 & 1.000 [1.00, 1.00] & 0.900 & 0.733 [0.62, 0.83] & 0.616 & 0 \\
 S10b $N{=}80$ & 4 & 1.000 [1.00, 1.00] & 0.900 & 0.717 [0.60, 0.83] & 0.616 & 0 \\
-S10b $N{=}72$ & 0 & 0.783 [0.70, 0.87] & 0.798 & 0.233 [0.15, 0.33] & 0.217 & 13 \\
-S10b $N{=}72$ & 1 & 0.633 [0.52, 0.75] & 0.798 & 0.150 [0.07, 0.23] & 0.217 & 22 \\
-S10b $N{=}72$ & 2 & 0.667 [0.55, 0.77] & 0.798 & 0.167 [0.08, 0.25] & 0.217 & 20 \\
-S10b $N{=}79$ & 0 & 0.350 [0.25, 0.45] & 0.494 & 0.117 [0.05, 0.18] & 0.020 & 39 \\
-S10b $N{=}79$ & 1 & 0.300 [0.20, 0.40] & 0.494 & 0.083 [0.03, 0.15] & 0.020 & 42 \\
-S10b $N{=}79$ & 2 & 0.233 [0.13, 0.35] & 0.494 & 0.067 [0.02, 0.13] & 0.020 & 46 \\
-S10b $N{=}88$ & 0 & 0.550 [0.42, 0.67] & 0.774 & 0.183 [0.08, 0.28] & 0.154 & 27 \\
-S10b $N{=}88$ & 1 & 0.600 [0.48, 0.70] & 0.774 & 0.200 [0.10, 0.32] & 0.154 & 24 \\
-S10b $N{=}88$ & 2 & 0.400 [0.28, 0.50] & 0.774 & 0.133 [0.07, 0.20] & 0.154 & 36 \\
-S10 $N{=}8$ & 0 & 1.000 [1.00, 1.00] & 0.855 & 0.383 [0.28, 0.48] & 0.351 & 0 \\
-S10 $N{=}8$ & 1 & 0.983 [0.95, 1.00] & 0.855 & 0.367 [0.22, 0.52] & 0.351 & 1 \\
-S10 $N{=}8$ & 2 & 0.967 [0.92, 1.00] & 0.855 & 0.350 [0.23, 0.48] & 0.351 & 2 \\
-S10 $N{=}24$ & 0 & 0.817 [0.72, 0.90] & 0.791 & 0.317 [0.22, 0.43] & 0.226 & 11 \\
-S10 $N{=}24$ & 1 & 0.733 [0.65, 0.82] & 0.791 & 0.267 [0.15, 0.38] & 0.226 & 16 \\
-S10 $N{=}24$ & 2 & 0.533 [0.43, 0.65] & 0.791 & 0.150 [0.07, 0.25] & 0.226 & 28 \\
+S10b $N{=}72$ & 0 & 0.783 [0.70, 0.87] & 0.798 & 0.233 [0.15, 0.33] & -- & 13 \\
+S10b $N{=}72$ & 1 & 0.633 [0.52, 0.75] & 0.798 & 0.150 [0.07, 0.23] & -- & 22 \\
+S10b $N{=}72$ & 2 & 0.667 [0.55, 0.77] & 0.798 & 0.167 [0.08, 0.25] & -- & 20 \\
+S10b $N{=}79$ & 0 & 0.350 [0.25, 0.45] & 0.494 & 0.117 [0.05, 0.18] & -- & 39 \\
+S10b $N{=}79$ & 1 & 0.300 [0.20, 0.40] & 0.494 & 0.083 [0.03, 0.15] & -- & 42 \\
+S10b $N{=}79$ & 2 & 0.233 [0.13, 0.35] & 0.494 & 0.067 [0.02, 0.13] & -- & 46 \\
+S10b $N{=}88$ & 0 & 0.550 [0.42, 0.67] & 0.774 & 0.183 [0.08, 0.28] & -- & 27 \\
+S10b $N{=}88$ & 1 & 0.600 [0.48, 0.70] & 0.774 & 0.200 [0.10, 0.32] & -- & 24 \\
+S10b $N{=}88$ & 2 & 0.400 [0.28, 0.50] & 0.774 & 0.133 [0.07, 0.20] & -- & 36 \\
+S10 $N{=}8$ & 0 & 1.000 [1.00, 1.00] & 0.855 & 0.383 [0.28, 0.48] & -- & 0 \\
+S10 $N{=}8$ & 1 & 0.983 [0.95, 1.00] & 0.855 & 0.367 [0.22, 0.52] & -- & 1 \\
+S10 $N{=}8$ & 2 & 0.967 [0.92, 1.00] & 0.855 & 0.350 [0.23, 0.48] & -- & 2 \\
+S10 $N{=}24$ & 0 & 0.817 [0.72, 0.90] & 0.791 & 0.317 [0.22, 0.43] & -- & 11 \\
+S10 $N{=}24$ & 1 & 0.733 [0.65, 0.82] & 0.791 & 0.267 [0.15, 0.38] & -- & 16 \\
+S10 $N{=}24$ & 2 & 0.533 [0.43, 0.65] & 0.791 & 0.150 [0.07, 0.25] & -- & 28 \\
 \bottomrule
 \end{tabular}
 \caption{Every run of the training-seed replication (Sec.~\ref{sec:followup}). Seed 0 is the original run. CIs are
-95\% bootstrap intervals over the 20 test episodes. A gap cell parks when its release fraction is below its bar; the
-on-frame cell (S10b $N{=}80$) is scored by R1. The same table is \texttt{results/supplementary\_results.md} in the
+95\% bootstrap intervals over the 20 test episodes. A gap cell parks when its release fraction is below its R2 release
+bar; R1 does not apply to gap cells, so their R1 bar is left blank (--). The on-frame cell (S10b $N{=}80$) is scored
+by R1. The same table is \texttt{results/supplementary\_results.md} in the
 repository.}
 \end{table}
 
