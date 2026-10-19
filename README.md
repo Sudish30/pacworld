@@ -2,6 +2,10 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23413087.svg)](https://doi.org/10.5281/zenodo.23413087)
 
+![the real game beside a 4-frame model and the strided-context model, same start and actions](docs/demo.gif)
+
+*Left to right: the real game, a 4-frame model that leaves a ghost parked in the pen, and the strided-context model, from the same start and recorded actions (an example rollout picked by a fixed rule; details below).*
+
 **[Play it in your browser](https://sudish30.github.io/pacworld/)** · **[Read the paper](https://doi.org/10.5281/zenodo.23413087)** (preprint on
 Zenodo; LaTeX source in [`paper/`](paper/)). The demo runs the model on your own GPU through WebGPU
 (desktop Chrome or Edge with a keyboard, 39 MB download, about 14 fps on an M3 Pro MacBook Pro against the game's 15).
@@ -33,8 +37,6 @@ server below has one, and the code to run it yourself is there too.
 - **How to read the numbers.** From the context comparison on, each test's pass/fail rule was written down before
   its result existed, and failed tests are reported as failures. Most models were trained once (one random seed);
   only the strided Ms. Pac-Man model and seven settings of the small test game were repeated with new seeds.
-
-![the real game beside a 4-frame model and the strided-context model, same start and actions](docs/demo.gif)
 
 *One held-out episode, 450 steps (30 s), same start and recorded actions: the real game, a 4-frame model, and the
 strided-context model. The 4-frame model keeps a ghost parked in the pen for 315 steps. This rollout was picked by a
